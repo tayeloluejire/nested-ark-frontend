@@ -14,11 +14,8 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect already-authenticated users away from login
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      router.replace('/dashboard');
-    }
+    if (!authLoading && isAuthenticated) router.replace('/dashboard');
   }, [isAuthenticated, authLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -29,91 +26,41 @@ export default function LoginPage() {
       await login(email, password);
       router.replace('/dashboard');
     } catch {
-      setError('Invalid credentials for this node.');
+      setError('Invalid credentials. Please check your email and password.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Show blank screen while auth check resolves (prevents flash)
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <Loader2 className="animate-spin text-teal-500" size={28} />
-      </div>
-    );
-  }
-
-  // Don't render login form if already authenticated (router.replace is in-flight)
+  if (authLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={28} /></div>;
   if (isAuthenticated) return null;
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-[400px] space-y-8">
         <div className="text-center">
-          <Image
-            src="/nested_ark_icon.png"
-            alt="Logo"
-            width={64}
-            height={64}
-            priority
-            className="mx-auto mb-6"
-            style={{ width: '64px', height: 'auto' }}
-          />
+          <Image src="/nested_ark_icon.png" alt="Logo" width={64} height={64} priority className="mx-auto mb-6" style={{ width: '64px', height: 'auto' }} />
           <h1 className="text-2xl font-bold text-white tracking-widest uppercase">System Login</h1>
-          <p className="text-zinc-500 text-xs mt-2 uppercase tracking-[0.2em]">
-            Credential Verification Required
-          </p>
+          <p className="text-zinc-500 text-xs mt-2 uppercase tracking-[0.2em]">Credential Verification Required</p>
         </div>
-
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-4">
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 pointer-events-none" />
-              <input
-                type="email"
-                placeholder="Operator Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full bg-black border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-              />
+              <input type="email" placeholder="Operator Email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className="w-full bg-black border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors" />
             </div>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 pointer-events-none" />
-              <input
-                type="password"
-                placeholder="Access Key"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="w-full bg-black border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-              />
+              <input type="password" placeholder="Access Key" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" className="w-full bg-black border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors" />
             </div>
           </div>
-
-          {error && (
-            <p className="text-red-400 text-[10px] uppercase font-bold tracking-widest text-center">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-teal-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center disabled:opacity-50"
-          >
+          {error && <p className="text-red-400 text-[10px] uppercase font-bold tracking-widest text-center">{error}</p>}
+          <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-teal-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center disabled:opacity-50">
             {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Establish Connection'}
           </button>
         </form>
-
         <p className="text-center text-zinc-500 text-xs uppercase tracking-widest">
-          New Operator?{' '}
-          <Link href="/register" className="text-teal-500 hover:underline">
-            Apply for Access
-          </Link>
+          New Operator?{' '}<Link href="/register" className="text-teal-500 hover:underline">Apply for Access</Link>
         </p>
       </div>
     </div>

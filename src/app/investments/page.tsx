@@ -1,53 +1,80 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
 import api from '@/lib/api';
-import { TrendingUp, Calculator, Loader2 } from 'lucide-react';
+import { TrendingUp, Calculator, Loader2, Activity, RefreshCw } from 'lucide-react';
 
-// Per-node funding state shape
-interface ProjectNode {
+interface Project {
   id: string;
-  label: string;
-  sector: string;
-  apy: string;
-  totalBudget: number;
+  title: string;
+  description: string;
+  location: string;
+  country: string;
+  budget: number;
+  currency: string;
+  category: string;
+  status: string;
+  progress_percentage: number;
+}
+
+interface ProjectWithFunding extends Project {
   currentFunded: number;
 }
 
-const INITIAL_NODES: ProjectNode[] = [
-  {
-    id: 'node-1024-1',
-    label: 'Infrastructure Node #1025',
-    sector: 'Bridge Construction — Sector 7G',
-    apy: '8.4% APY',
-    totalBudget: 500000,
-    currentFunded: 312000,
-  },
-  {
-    id: 'node-1024-2',
-    label: 'Infrastructure Node #1026',
-    sector: 'Bridge Construction — Sector 7G',
-    apy: '8.4% APY',
-    totalBudget: 750000,
-    currentFunded: 189000,
-  },
-];
-
 export default function InvestmentCorner() {
-  const { user } = useAuth();
-  const [calc, setCalc] = useState({ amount: 10000, duration: 12 });
+  const { user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+  const [calc, setCalc] = useState({ amount: 10000 });
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
-  const [nodes, setNodes] = useState<ProjectNode[]>(INITIAL_NODES);
+  const [projects, setProjects] = useState<ProjectWithFunding[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const projectedROI = (calc.amount * 0.12).toFixed(2);
 
-  const handleCommit = async (projectId: string, amount: number) => {
-    if (!user) {
-      alert('Authentication Required: Please log in to commit capital.');
-      return;
+  const fetchProjects = useCallback(async () => {
+    setDataLoading(true);
+    setError(null);
+    try {
+      const res = await api.get('/api/projects');
+      const rawProjects: Project[] = res.data.projects ?? [];
+
+      // Fetch investment totals for each project in parallel
+      const withFunding = await Promise.all(
+        rawProjects.map(async (p) => {
+          try {
+            const invRes = await api.get('/api/investments');
+            const allInvestments: any[] = invRes.data.investments ?? [];
+            const currentFunded = allInvestments
+              .filter((i: any) => i.project_id === p.id && i.status === 'COMMITTED')
+              .reduce((sum: number, i: any) => sum + Number(i.amount), 0);
+            return { ...p, currentFunded };
+          } catch {
+            return { ...p, currentFunded: 0 };
+          }
+        })
+      );
+
+      setProjects(withFunding);
+    } catch (err: any) {
+      setError('Failed to load investment nodes.');
+    } finally {
+      setDataLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { router.replace('/login'); return; }
+    fetchProjects();
+  }, [user, authLoading, router, fetchProjects]);
+
+  const handleCommit = async (projectId: string, amount: number) => {
+    if (!user) { router.replace('/login'); return; }
+    if (amount <= 0) { alert('Amount must be greater than 0'); return; }
 
     setIsSubmitting(projectId);
     try {
@@ -57,23 +84,31 @@ export default function InvestmentCorner() {
         amount,
       });
 
-      // Optimistically update pool funding after a successful commit
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === projectId
-            ? { ...n, currentFunded: Math.min(n.currentFunded + amount, n.totalBudget) }
-            : n
+      // Optimistically update pool funding
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === projectId
+            ? { ...p, currentFunded: Math.min(p.currentFunded + amount, p.budget) }
+            : p
         )
       );
 
-      alert('Capital Committed. Moving to Escrow Protocol.');
-    } catch (err) {
-      console.error('Node Connection Failed', err);
-      alert('Node Connection Failed: Protocol Error.');
+      alert(`$${amount.toLocaleString()} committed successfully. Capital is now in escrow.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Commitment failed. Please try again.';
+      alert(msg);
     } finally {
       setIsSubmitting(null);
     }
   };
+
+  if (authLoading || dataLoading) {
+    return (
+      <div className="h-screen bg-[#050505] flex items-center justify-center">
+        <Activity className="animate-spin text-teal-500" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
@@ -88,12 +123,12 @@ export default function InvestmentCorner() {
                 <Calculator className="text-teal-500" />
                 <h3 className="font-bold uppercase tracking-widest text-sm">ROI Calculator</h3>
               </div>
-              <label className="text-[10px] text-zinc-500 uppercase font-bold">Principal Investment</label>
+              <label className="text-[10px] text-zinc-500 uppercase font-bold">Principal Investment (USD)</label>
               <input
                 type="range" min="1000" max="100000" step="1000"
                 className="w-full h-1 bg-zinc-800 accent-teal-500 my-4"
                 value={calc.amount}
-                onChange={(e) => setCalc({ ...calc, amount: Number(e.target.value) })}
+                onChange={(e) => setCalc({ amount: Number(e.target.value) })}
               />
               <div className="flex justify-between font-mono text-xl mb-8">
                 <span>${calc.amount.toLocaleString()}</span>
@@ -101,64 +136,96 @@ export default function InvestmentCorner() {
               </div>
               <div className="pt-6 border-t border-zinc-800">
                 <p className="text-[10px] text-zinc-500 uppercase font-bold">Projected Net Return</p>
-                <h4 className="text-3xl font-bold text-teal-500">${projectedROI}</h4>
+                <h4 className="text-3xl font-bold text-teal-500">${Number(projectedROI).toLocaleString()}</h4>
               </div>
+            </div>
+
+            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/30">
+              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Operator</p>
+              <p className="text-white font-mono text-sm truncate">{user?.email}</p>
+              <p className="text-teal-500 text-[10px] uppercase font-bold mt-1">{user?.role}</p>
             </div>
           </div>
 
-          {/* Market Listings */}
+          {/* Live Project Nodes */}
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold tracking-tight uppercase italic">Investment Nodes</h2>
-              <span className="text-xs text-zinc-500 font-mono">Min. Fund: $1,000.00</span>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight uppercase italic">Investment Nodes</h2>
+                <p className="text-zinc-500 text-xs mt-1">Live infrastructure funding pools</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-zinc-500 font-mono">Min. $1,000</span>
+                <button
+                  onClick={fetchProjects}
+                  className="p-2 rounded-lg border border-zinc-800 text-zinc-500 hover:text-teal-500 hover:border-teal-500/50 transition-all"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
             </div>
 
-            {nodes.map((node) => {
-              const fillPct = Math.min(
-                Math.round((node.currentFunded / node.totalBudget) * 100),
-                100
-              );
+            {error && (
+              <div className="p-6 rounded-2xl border border-red-500/20 bg-red-500/5 text-center">
+                <p className="text-red-400 text-xs uppercase font-bold">{error}</p>
+                <button onClick={fetchProjects} className="mt-3 text-teal-500 text-xs underline">Retry</button>
+              </div>
+            )}
+
+            {!error && projects.length === 0 && (
+              <div className="py-20 text-center border border-dashed border-zinc-800 rounded-3xl">
+                <TrendingUp className="mx-auto text-zinc-700 mb-4" size={32} />
+                <p className="text-zinc-600 text-xs uppercase font-bold tracking-widest">No active investment nodes</p>
+                <p className="text-zinc-700 text-[10px] mt-2 font-mono">Projects will appear here once created by sponsors.</p>
+              </div>
+            )}
+
+            {projects.map((project) => {
+              const fillPct = project.budget > 0
+                ? Math.min(Math.round((project.currentFunded / project.budget) * 100), 100)
+                : 0;
               const isFull = fillPct >= 100;
+              const remaining = Math.max(project.budget - project.currentFunded, 0);
+              const commitAmount = Math.min(calc.amount, remaining);
 
               return (
                 <div
-                  key={node.id}
+                  key={project.id}
                   className="p-8 rounded-3xl border border-zinc-800 bg-zinc-950 flex flex-col gap-6 group hover:border-zinc-700 transition-colors"
                 >
-                  {/* Top row: icon + title + yield + button */}
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-6">
-                      <div className="h-16 w-16 rounded-2xl bg-zinc-900 flex items-center justify-center border border-zinc-800 group-hover:border-teal-500/50 transition-colors">
-                        <TrendingUp className="text-teal-500" />
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-6">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="h-12 w-12 rounded-xl bg-zinc-900 flex items-center justify-center border border-zinc-800 group-hover:border-teal-500/50 transition-colors flex-shrink-0 mt-1">
+                        <TrendingUp className="text-teal-500" size={18} />
                       </div>
-                      <div>
-                        <h4 className="font-bold text-lg uppercase tracking-tight">{node.label}</h4>
-                        <p className="text-zinc-500 text-xs">{node.sector}</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-base uppercase tracking-tight">{project.title}</h4>
+                          <span className="text-[9px] px-2 py-0.5 rounded border border-teal-500/30 text-teal-500 uppercase font-bold">{project.status}</span>
+                        </div>
+                        <p className="text-zinc-500 text-xs mt-1">{project.location}, {project.country} · {project.category}</p>
+                        <p className="text-zinc-600 text-[10px] mt-2 line-clamp-2">{project.description}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
+                    <div className="flex items-center gap-6 w-full md:w-auto">
                       <div className="text-right">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Target Yield</p>
-                        <p className="font-bold text-emerald-500 font-mono">{node.apy}</p>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Target</p>
+                        <p className="font-bold text-white font-mono text-sm">${(project.budget / 1000).toFixed(0)}k</p>
                       </div>
                       <button
-                        disabled={isSubmitting === node.id || isFull}
-                        onClick={() => handleCommit(node.id, calc.amount)}
-                        className="min-w-[120px] flex justify-center items-center px-6 py-3 rounded-xl bg-white text-black font-black uppercase text-[10px] tracking-widest hover:bg-teal-500 transition-all active:scale-95 disabled:opacity-50"
+                        disabled={isSubmitting === project.id || isFull || commitAmount <= 0}
+                        onClick={() => handleCommit(project.id, commitAmount)}
+                        className="min-w-[110px] flex justify-center items-center px-5 py-3 rounded-xl bg-white text-black font-black uppercase text-[10px] tracking-widest hover:bg-teal-500 transition-all active:scale-95 disabled:opacity-40"
                       >
-                        {isSubmitting === node.id ? (
-                          <Loader2 className="animate-spin" size={16} />
-                        ) : isFull ? (
-                          'Funded'
-                        ) : (
-                          'Commit'
-                        )}
+                        {isSubmitting === project.id ? (
+                          <Loader2 className="animate-spin" size={14} />
+                        ) : isFull ? 'Funded' : 'Commit'}
                       </button>
                     </div>
                   </div>
 
-                  {/* Pool Liquidity Progress Bar */}
+                  {/* Pool Liquidity */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
                       <span>Pool Liquidity</span>
@@ -171,15 +238,14 @@ export default function InvestmentCorner() {
                       />
                     </div>
                     <div className="flex justify-between text-[10px] text-zinc-600 font-mono">
-                      <span>${node.currentFunded.toLocaleString()} raised</span>
-                      <span>${node.totalBudget.toLocaleString()} target</span>
+                      <span>${project.currentFunded.toLocaleString()} raised</span>
+                      <span>${project.budget.toLocaleString()} target</span>
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-
         </div>
       </main>
     </div>
