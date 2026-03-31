@@ -26,23 +26,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  // Start as true so pages wait for auth check before rendering redirect logic
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async (authToken: string) => {
     try {
+      // Force the token into this specific request to ensure fresh validation
       const res = await api.get('/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       setUser(res.data.user);
       setToken(authToken);
     } catch {
-      // Token invalid or expired — clear it
       localStorage.removeItem('token');
       setToken(null);
       setUser(null);
     } finally {
-      // Always mark loading done, even on error
       setIsLoading(false);
     }
   }, []);
@@ -52,13 +50,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (storedToken) {
       fetchUser(storedToken);
     } else {
-      // No token — immediately done loading
       setIsLoading(false);
     }
   }, [fetchUser]);
 
   const login = async (email: string, password: string) => {
-    const res = await api.post('/api/auth/login', { email, password });
+    // Backend expects email to be handled as lowercase
+    const res = await api.post('/api/auth/login', { 
+      email: email.toLowerCase(), 
+      password 
+    });
+    
     const accessToken = res.data.tokens.access_token;
     localStorage.setItem('token', accessToken);
     setToken(accessToken);
@@ -71,7 +73,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     full_name: string,
     role: string
   ) => {
-    const res = await api.post('/api/auth/register', { email, password, full_name, role });
+    const res = await api.post('/api/auth/register', { 
+      email: email.toLowerCase(), 
+      password, 
+      full_name, 
+      role 
+    });
+    
     const accessToken = res.data.tokens.access_token;
     localStorage.setItem('token', accessToken);
     setToken(accessToken);
