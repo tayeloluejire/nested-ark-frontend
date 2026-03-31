@@ -1,187 +1,104 @@
 'use client';
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/lib/AuthContext';
-import Navbar from '@/components/Navbar';
-import api from '@/lib/api';
-import { TrendingUp, Calculator, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowLeft, Shield, Landmark, HardHat, LogIn } from 'lucide-react';
 
-// Per-node funding state shape
-interface ProjectNode {
-  id: string;
-  label: string;
-  sector: string;
-  apy: string;
-  totalBudget: number;
-  currentFunded: number;
-}
+export default function RegisterPage() {
+  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('INVESTOR');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-const INITIAL_NODES: ProjectNode[] = [
-  {
-    id: 'node-1024-1',
-    label: 'Infrastructure Node #1025',
-    sector: 'Bridge Construction — Sector 7G',
-    apy: '8.4% APY',
-    totalBudget: 500000,
-    currentFunded: 312000,
-  },
-  {
-    id: 'node-1024-2',
-    label: 'Infrastructure Node #1026',
-    sector: 'Bridge Construction — Sector 7G',
-    apy: '8.4% APY',
-    totalBudget: 750000,
-    currentFunded: 189000,
-  },
-];
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) router.replace('/dashboard');
+  }, [isAuthenticated, authLoading, router]);
 
-export default function InvestmentCorner() {
-  const { user } = useAuth();
-  const [calc, setCalc] = useState({ amount: 10000, duration: 12 });
-  const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
-  const [nodes, setNodes] = useState<ProjectNode[]>(INITIAL_NODES);
+  const roles = [
+    { id: 'INVESTOR', label: 'Investor', icon: Landmark },
+    { id: 'CONTRACTOR', label: 'Contractor', icon: HardHat },
+    { id: 'GOVERNMENT', label: 'Govt/Sponsor', icon: Shield },
+  ];
 
-  const projectedROI = (calc.amount * 0.12).toFixed(2);
-
-  const handleCommit = async (projectId: string, amount: number) => {
-    if (!user) {
-      alert('Authentication Required: Please log in to commit capital.');
-      return;
-    }
-
-    setIsSubmitting(projectId);
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!name.trim()) { setError('Full name is required.'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setIsSubmitting(true);
     try {
-      await api.post('/api/investments/commit', {
-        project_id: projectId,
-        investor_id: user.id,
-        amount,
-      });
-
-      // Optimistically update pool funding after a successful commit
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === projectId
-            ? { ...n, currentFunded: Math.min(n.currentFunded + amount, n.totalBudget) }
-            : n
-        )
-      );
-
-      alert('Capital Committed. Moving to Escrow Protocol.');
-    } catch (err) {
-      console.error('Node Connection Failed', err);
-      alert('Node Connection Failed: Protocol Error.');
+      await register(email.trim(), password, name.trim(), role);
+      router.replace('/dashboard');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.response?.data?.error || 'Account initialization failed. Please try again.';
+      setError(msg);
     } finally {
-      setIsSubmitting(null);
+      setIsSubmitting(false);
     }
   };
 
+  if (authLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={28} /></div>;
+  if (isAuthenticated) return null;
+
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <Navbar />
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-          {/* ROI Calculator */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="p-8 rounded-3xl border border-zinc-800 bg-zinc-900/50 backdrop-blur-md">
-              <div className="flex items-center gap-3 mb-8">
-                <Calculator className="text-teal-500" />
-                <h3 className="font-bold uppercase tracking-widest text-sm">ROI Calculator</h3>
-              </div>
-              <label className="text-[10px] text-zinc-500 uppercase font-bold">Principal Investment</label>
-              <input
-                type="range" min="1000" max="100000" step="1000"
-                className="w-full h-1 bg-zinc-800 accent-teal-500 my-4"
-                value={calc.amount}
-                onChange={(e) => setCalc({ ...calc, amount: Number(e.target.value) })}
-              />
-              <div className="flex justify-between font-mono text-xl mb-8">
-                <span>${calc.amount.toLocaleString()}</span>
-                <span className="text-teal-500">+12% Est.</span>
-              </div>
-              <div className="pt-6 border-t border-zinc-800">
-                <p className="text-[10px] text-zinc-500 uppercase font-bold">Projected Net Return</p>
-                <h4 className="text-3xl font-bold text-teal-500">${projectedROI}</h4>
-              </div>
-            </div>
-          </div>
-
-          {/* Market Listings */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold tracking-tight uppercase italic">Investment Nodes</h2>
-              <span className="text-xs text-zinc-500 font-mono">Min. Fund: $1,000.00</span>
-            </div>
-
-            {nodes.map((node) => {
-              const fillPct = Math.min(
-                Math.round((node.currentFunded / node.totalBudget) * 100),
-                100
-              );
-              const isFull = fillPct >= 100;
-
-              return (
-                <div
-                  key={node.id}
-                  className="p-8 rounded-3xl border border-zinc-800 bg-zinc-950 flex flex-col gap-6 group hover:border-zinc-700 transition-colors"
-                >
-                  {/* Top row: icon + title + yield + button */}
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="flex items-center gap-6">
-                      <div className="h-16 w-16 rounded-2xl bg-zinc-900 flex items-center justify-center border border-zinc-800 group-hover:border-teal-500/50 transition-colors">
-                        <TrendingUp className="text-teal-500" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-lg uppercase tracking-tight">{node.label}</h4>
-                        <p className="text-zinc-500 text-xs">{node.sector}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
-                      <div className="text-right">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Target Yield</p>
-                        <p className="font-bold text-emerald-500 font-mono">{node.apy}</p>
-                      </div>
-                      <button
-                        disabled={isSubmitting === node.id || isFull}
-                        onClick={() => handleCommit(node.id, calc.amount)}
-                        className="min-w-[120px] flex justify-center items-center px-6 py-3 rounded-xl bg-white text-black font-black uppercase text-[10px] tracking-widest hover:bg-teal-500 transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {isSubmitting === node.id ? (
-                          <Loader2 className="animate-spin" size={16} />
-                        ) : isFull ? (
-                          'Funded'
-                        ) : (
-                          'Commit'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Pool Liquidity Progress Bar */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
-                      <span>Pool Liquidity</span>
-                      <span className="text-teal-500">{fillPct}%</span>
-                    </div>
-                    <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-teal-500 transition-all duration-1000 rounded-full"
-                        style={{ width: `${fillPct}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-zinc-600 font-mono">
-                      <span>${node.currentFunded.toLocaleString()} raised</span>
-                      <span>${node.totalBudget.toLocaleString()} target</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
+    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-6">
+      <div className="w-full max-w-[500px]">
+        <div className="flex justify-between items-center mb-8">
+          <Link href="/login" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-white group">
+            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> Back to Login
+          </Link>
         </div>
-      </main>
+        <div className="mb-8 space-y-2">
+          <Image src="/nested_ark_icon.png" alt="Logo" width={48} height={48} priority style={{ width: '48px', height: 'auto' }} />
+          <h1 className="text-3xl font-bold tracking-tight text-white">Initialize Account</h1>
+          <p className="text-zinc-400 text-sm">Select your operator role to engage the infrastructure.</p>
+        </div>
+        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 backdrop-blur-xl shadow-2xl">
+          <form onSubmit={handleRegister} className="space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              {roles.map((r) => { const Icon = r.icon; const isActive = role === r.id; return (
+                <button key={r.id} type="button" onClick={() => setRole(r.id)} className={`flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${isActive ? 'border-teal-500 bg-teal-500/10 text-white' : 'border-zinc-800 bg-black text-zinc-500 hover:border-zinc-700'}`}>
+                  <Icon size={20} className={isActive ? 'text-teal-500' : 'text-zinc-600'} />
+                  <span className="mt-2 text-[10px] font-bold uppercase tracking-tighter">{r.label}</span>
+                </button>
+              ); })}
+            </div>
+            <div className="space-y-4">
+              <input type="text" placeholder="Authorized Full Name" value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors" />
+              <input type="email" placeholder="Verification Email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors" />
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} placeholder="Access Password (min. 6 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="new-password" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            {error && (
+              <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center space-y-3">
+                <p className="text-red-400 text-[10px] uppercase font-bold tracking-widest">{error}</p>
+                {(error.toLowerCase().includes('registered') || error.toLowerCase().includes('exists')) && (
+                  <Link href="/login" className="flex items-center justify-center gap-2 text-white bg-red-500/20 py-2 rounded-lg text-[10px] font-bold uppercase hover:bg-red-500/30 transition-all">
+                    <LogIn size={12} /> Login to existing account
+                  </Link>
+                )}
+              </div>
+            )}
+            <button type="submit" disabled={isSubmitting} className="w-full py-4 rounded-xl bg-teal-500 text-black font-bold uppercase text-xs tracking-[0.2em] hover:bg-teal-400 transition-all disabled:opacity-50 flex items-center justify-center">
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Activate Connection'}
+            </button>
+          </form>
+        </div>
+        <p className="text-center text-zinc-500 text-xs uppercase tracking-widest mt-6">
+          Already registered? <Link href="/login" className="text-teal-500 hover:underline">Sign In</Link>
+        </p>
+      </div>
     </div>
   );
 }
