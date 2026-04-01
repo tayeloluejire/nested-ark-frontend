@@ -34,14 +34,11 @@ export default function RegisterPage() {
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setIsSubmitting(true);
     try {
-      await register(email.trim(), password, name.trim(), role);
-      router.replace('/dashboard');
+      const route = await register(email.trim(), password, name.trim(), role);
+      router.replace(route);
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.response?.data?.error || 'Account initialization failed. Please try again.';
-      setError(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
+      setError(err?.response?.data?.message || err?.response?.data?.error || 'Account initialization failed. Please try again.');
+    } finally { setIsSubmitting(false); }
   };
 
   if (authLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={28} /></div>;

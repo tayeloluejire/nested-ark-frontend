@@ -3,25 +3,21 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import api from './api';
 
 export type UserRole = 'GOVERNMENT' | 'INVESTOR' | 'CONTRACTOR' | 'ADMIN';
-
-interface User {
-  id: string;
-  email: string;
-  role: UserRole;
-  full_name: string;
-}
-
+interface User { id: string; email: string; role: UserRole; full_name: string; }
 interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, full_name: string, role: string) => Promise<void>;
+  user: User | null; token: string | null; isLoading: boolean; isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<string>;
+  register: (email: string, password: string, full_name: string, role: string) => Promise<string>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function getRoleRoute(role: UserRole): string {
+  if (role === 'INVESTOR') return '/investments';
+  if (role === 'CONTRACTOR') return '/projects';
+  return '/projects'; // GOVERNMENT, ADMIN
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -30,80 +26,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = useCallback(async (authToken: string) => {
     try {
-      // Force the token into this specific request to ensure fresh validation
-      const res = await api.get('/api/auth/me', {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      setUser(res.data.user);
-      setToken(authToken);
+      const res = await api.get('/api/auth/me', { headers: { Authorization: `Bearer ${authToken}` } });
+      setUser(res.data.user); setToken(authToken);
     } catch {
-      localStorage.removeItem('token');
-      setToken(null);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+      localStorage.removeItem('token'); setToken(null); setUser(null);
+    } finally { setIsLoading(false); }
   }, []);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      fetchUser(storedToken);
-    } else {
-      setIsLoading(false);
-    }
+    if (storedToken) { fetchUser(storedToken); } else { setIsLoading(false); }
   }, [fetchUser]);
 
-  const login = async (email: string, password: string) => {
-    // Backend expects email to be handled as lowercase
-    const res = await api.post('/api/auth/login', { 
-      email: email.toLowerCase(), 
-      password 
-    });
-    
+  const login = async (email: string, password: string): Promise<string> => {
+    const res = await api.post('/api/auth/login', { email: email.toLowerCase(), password });
     const accessToken = res.data.tokens.access_token;
     localStorage.setItem('token', accessToken);
-    setToken(accessToken);
-    setUser(res.data.user);
+    setToken(accessToken); setUser(res.data.user);
+    return getRoleRoute(res.data.user.role as UserRole);
   };
 
-  const register = async (
-    email: string,
-    password: string,
-    full_name: string,
-    role: string
-  ) => {
-    const res = await api.post('/api/auth/register', { 
-      email: email.toLowerCase(), 
-      password, 
-      full_name, 
-      role 
-    });
-    
+  const register = async (email: string, password: string, full_name: string, role: string): Promise<string> => {
+    const res = await api.post('/api/auth/register', { email: email.toLowerCase(), password, full_name, role });
     const accessToken = res.data.tokens.access_token;
     localStorage.setItem('token', accessToken);
-    setToken(accessToken);
-    setUser(res.data.user);
+    setToken(accessToken); setUser(res.data.user);
+    return getRoleRoute(res.data.user.role as UserRole);
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('token');
-  };
+  const logout = () => { setUser(null); setToken(null); localStorage.removeItem('token'); };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isLoading,
-        isAuthenticated: !!user,
-        login,
-        register,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, isLoading, isAuthenticated: !!user, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
