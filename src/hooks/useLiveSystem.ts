@@ -32,3 +32,17 @@ export function useContractorProfile() {
   });
   return { profile: data?.contractor ?? null, hasProfile: !!data?.contractor, isLoading, error, mutate };
 }
+
+export function useLiveMarket() {
+  const { data, error, isLoading } = useSWR('/api/market/summary', fetcher, {
+    refreshInterval: 60000, // 1 min
+  });
+  return { summary: data?.summary ?? null, isLoading, error };
+}
+
+export function useLiveTicker() {
+  const { data, isLoading } = useSWR('/api/ticker', fetcher, {
+    refreshInterval: 15000, // 15s
+  });
+  return { items: data?.items ?? [], isLoading };
+}
