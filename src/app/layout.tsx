@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/AuthContext";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
   title: "Nested Ark OS | Infrastructure Investment System",
@@ -14,9 +16,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full scroll-smooth">
-      <body className="antialiased min-h-screen bg-[#050505] text-white">
+      <body className="antialiased min-h-screen bg-[#050505] text-white flex flex-col">
         <AuthProvider>
-          {children}
+          {/* Navbar stays at the top of every page */}
+          <Navbar />
+          
+          {/* Main content expands to fill available space, pushing footer down */}
+          <main className="flex-1">
+            {children}
+          </main>
+
+          {/* Footer stays at the bottom of every page */}
+          <Footer />
         </AuthProvider>
       </body>
     </html>

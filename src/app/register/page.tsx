@@ -24,7 +24,9 @@ export default function RegisterPage() {
   const roles = [
     { id: 'INVESTOR', label: 'Investor', icon: Landmark },
     { id: 'CONTRACTOR', label: 'Contractor', icon: HardHat },
-    { id: 'GOVERNMENT', label: 'Govt/Sponsor', icon: Shield },
+    { id: 'SUPPLIER', label: 'Supplier', icon: Truck },
+    { id: 'BANK', label: 'Bank', icon: Landmark },      
+    { id: 'GOVERNMENT', label: 'Govt', icon: Shield },
   ];
 
   const handleRegister = async (e: React.FormEvent) => {
