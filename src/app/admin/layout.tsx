@@ -5,13 +5,14 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import MarketTicker from '@/components/MarketTicker';
-import { LayoutDashboard, ShieldCheck, Users, Database, Briefcase, LogOut, ChevronRight, Menu, Activity, Loader2 } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, Users, Database, Briefcase, LogOut, ChevronRight, Menu, Activity, Loader2, Megaphone } from 'lucide-react';
 
 const navItems = [
   { href: '/admin', label: 'Command Center', icon: LayoutDashboard, exact: true },
   { href: '/admin/approval', label: 'Approval Queue', icon: ShieldCheck },
   { href: '/admin/projects', label: 'Projects', icon: Briefcase },
   { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin/news', label: 'Ticker & Ads', icon: Megaphone },
   { href: '/admin/ledger', label: 'Ledger', icon: Database },
 ];
 
@@ -23,20 +24,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!isLoading && !user) { router.replace('/login'); return; }
-    if (!isLoading && user && user.role !== 'ADMIN' && user.role !== 'GOVERNMENT') router.replace('/dashboard');
+    if (!isLoading && user && user.role !== 'ADMIN' && user.role !== 'GOVERNMENT' && user.role !== 'VERIFIER') router.replace('/dashboard');
   }, [user, isLoading, router]);
 
   if (isLoading || !user) return <div className="h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={32} /></div>;
-  if (user.role !== 'ADMIN' && user.role !== 'GOVERNMENT') return null;
+  if (!['ADMIN', 'GOVERNMENT', 'VERIFIER'].includes(user.role)) return null;
 
-  const isActive = (href: string, exact?: boolean) => exact ? pathname === href : pathname.startsWith(href) && pathname !== '/admin' || (exact && pathname === href);
+  const isActive = (href: string, exact?: boolean) => exact ? pathname === href : pathname.startsWith(href);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
       <MarketTicker />
-      <div className="flex flex-1">
-        {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-black border-r border-zinc-800 flex flex-col transform transition-transform duration-300 lg:translate-x-0 lg:static ${open ? 'translate-x-0' : '-translate-x-full'}`} style={{ marginTop: 'var(--ticker-height, 0)' }}>
+      <div className="flex flex-1 min-h-0">
+        <aside className={`fixed inset-y-0 left-0 z-50 w-60 bg-black border-r border-zinc-800 flex flex-col transform transition-transform duration-300 lg:translate-x-0 lg:static ${open ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="p-5 border-b border-zinc-800 flex items-center gap-3">
             <div className="relative h-7 w-7 flex-shrink-0">
               <Image src="/nested_ark_icon.png" alt="Logo" fill sizes="28px" className="object-contain" />
@@ -52,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
             <p className="text-zinc-600 text-[9px] font-mono mt-1.5 truncate">{user.email}</p>
           </div>
-          <nav className="flex-1 p-3 space-y-1">
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             {navItems.map(item => {
               const Icon = item.icon;
               const active = item.exact ? pathname === item.href : (pathname.startsWith(item.href) && item.href !== '/admin') || (item.exact && pathname === item.href);
@@ -74,7 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </aside>
         {open && <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setOpen(false)} />}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-black">
             <button onClick={() => setOpen(true)} className="p-2 text-zinc-400 hover:text-white"><Menu size={20} /></button>
             <span className="text-xs font-bold uppercase tracking-widest text-teal-500">Admin</span>
