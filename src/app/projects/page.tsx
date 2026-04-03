@@ -1,387 +1,202 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import CurrencySelector from '@/components/CurrencySelector';
+import { useLiveProjects } from '@/hooks/useLiveSystem';
 import { useCurrency } from '@/hooks/useCurrency';
 import api from '@/lib/api';
-import {
-  MapPin, Calendar, DollarSign, Building2, ShieldCheck,
-  CheckCircle2, Clock, AlertCircle, Loader2, ArrowLeft,
-  FileText, TrendingUp, Users, Image as ImageIcon,
-  Globe, Cpu, Zap, CreditCard, ChevronDown, ChevronUp,
-  BarChart3, Target, Award, Hash
-} from 'lucide-react';
+import { Briefcase, TrendingUp, ShieldCheck, Plus, Loader2, Globe, MapPin, Activity, X, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 
-const CAT_ICON: Record<string,string> = {
-  Roads:'🛣️', Energy:'⚡', Water:'💧', Bridges:'🌉', Technology:'💻', Railways:'🚆', Ports:'⚓', Healthcare:'🏥'
-};
-const MOCK_GALLERY = [
-  { type:'render', label:'Site Master Plan', src:'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&q=80' },
-  { type:'render', label:'3D Elevation View', src:'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80' },
-  { type:'doc',    label:'Environmental Impact Assessment', ext:'PDF' },
-  { type:'doc',    label:'Government Approval Letter',     ext:'PDF' },
-  { type:'doc',    label:'Financial Model & Projections',  ext:'XLSX' },
-  { type:'doc',    label:'Engineering Feasibility Report', ext:'PDF' },
-];
-const RISK_GRADES = ['AAA','AA','A','BBB'];
+const CATEGORIES = ['Roads','Bridges','Water','Energy','Technology','Housing','Healthcare','Education','Agriculture','Telecommunications'];
 
-export default function ProjectPitchPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+function BidModal({ project, milestones, onClose, onSuccess }: any) {
+  const [form, setForm] = useState({ milestone_id: milestones[0]?.id || '', amount: '', timeline_days: '90', proposal: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.post(`/api/projects/${project.id}/apply`, {
+        amount: parseFloat(form.amount),
+        timeline_days: parseInt(form.timeline_days),
+        proposal: form.proposal,
+        milestone_id: form.milestone_id || undefined,
+      });
+      alert('Bid submitted successfully!');
+      onSuccess();
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Bid submission failed');
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-3xl p-8 space-y-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-xl font-bold uppercase tracking-tight">Submit Bid</h3>
+            <p className="text-zinc-500 text-xs mt-1 uppercase tracking-widest line-clamp-1">{project.title}</p>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-white"><X size={20} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Bid Amount (USD) *</label>
+              <input required type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+            </div>
+            <div>
+              <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Timeline (days) *</label>
+              <input required type="number" value={form.timeline_days} onChange={e => setForm({ ...form, timeline_days: e.target.value })} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+            </div>
+          </div>
+          <textarea required rows={4} value={form.proposal} onChange={e => setForm({ ...form, proposal: e.target.value })} placeholder="Technical proposal..." className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500 resize-none" />
+          <div className="flex gap-3">
+            <button type="submit" disabled={submitting} className="flex-1 py-4 bg-white text-black font-bold uppercase text-xs tracking-widest rounded-xl hover:bg-teal-500 transition-all flex items-center justify-center gap-2">
+              {submitting ? <Loader2 className="animate-spin" size={14} /> : 'Deploy Bid'}
+            </button>
+            <button type="button" onClick={onClose} className="px-6 py-4 border border-zinc-700 text-zinc-400 font-bold uppercase text-xs rounded-xl hover:text-white">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function NewProjectModal({ onClose, onSuccess }: any) {
+  const [form, setForm] = useState({ title: '', description: '', location: '', country: 'Nigeria', budget: '', category: 'Roads', timeline_months: '24' });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.post('/api/projects', { ...form, budget: parseFloat(form.budget), timeline_months: parseInt(form.timeline_months) });
+      alert('Project created successfully!');
+      onSuccess();
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Failed to create project');
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-3xl p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-xl font-bold uppercase">New Project</h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Project Title *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          <textarea required rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Description *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500 resize-none" />
+          <div className="grid grid-cols-2 gap-4">
+            <input required value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="City *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+            <input required value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="Country *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <input required type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} placeholder="Budget (USD) *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+            <input type="number" value={form.timeline_months} onChange={e => setForm({ ...form, timeline_months: e.target.value })} placeholder="Months" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          </div>
+          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none">
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <div className="flex gap-3">
+            <button type="submit" disabled={submitting} className="flex-1 py-4 bg-teal-500 text-black font-bold uppercase text-xs rounded-xl hover:bg-teal-400 transition-all flex items-center justify-center">
+              {submitting ? <Loader2 className="animate-spin" size={14} /> : 'Create Project'}
+            </button>
+            <button type="button" onClick={onClose} className="px-6 py-4 border border-zinc-700 text-zinc-400 font-bold uppercase text-xs rounded-xl">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function ProjectsPage() {
   const { user, isLoading: authLoading } = useAuth();
-  const { format } = useCurrency();
-  const [project, setProject]     = useState<any>(null);
-  const [milestones, setMilestones] = useState<any[]>([]);
-  const [investments, setInvestments] = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [tab, setTab]             = useState<'overview'|'financials'|'documents'|'team'>('overview');
-  const [expandedMs, setExpandedMs] = useState<string | null>(null);
+  const router = useRouter();
+  const { projects, isLoading, mutate } = useLiveProjects();
+  const { currency, setCurrency, format } = useCurrency();
+  const [bidProject, setBidProject] = useState<any>(null);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [geoScope, setGeoScope] = useState<'LOCAL' | 'GLOBAL'>('GLOBAL');
+  const [filter, setFilter] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading, router]);
 
-  useEffect(() => {
-    if (!id) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const [p, m, inv] = await Promise.allSettled([
-          api.get(`/api/projects/${id}`),
-          api.get(`/api/milestones/project/${id}`),
-          api.get(`/api/investments?project_id=${id}`),
-        ]);
-        if (p.status === 'fulfilled') setProject(p.value.data.project ?? p.value.data);
-        if (m.status === 'fulfilled') setMilestones(m.value.data.milestones ?? []);
-        if (inv.status === 'fulfilled') setInvestments(inv.value.data.investments ?? []);
-      } finally { setLoading(false); }
-    })();
-  }, [id]);
+  if (authLoading || !user) return <div className="h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={32} /></div>;
 
-  if (authLoading || loading) return (
-    <div className="h-screen bg-[#050505] flex items-center justify-center">
-      <Loader2 className="animate-spin text-teal-500" size={32}/>
-    </div>
-  );
-  if (!project) return (
-    <div className="h-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
-      <AlertCircle className="text-red-400" size={32}/>
-      <p className="text-zinc-400">Project not found.</p>
-      <Link href="/investments" className="text-teal-500 hover:underline text-sm">← Back to Investments</Link>
-    </div>
-  );
+  const isGovt = user.role === 'GOVERNMENT' || user.role === 'ADMIN';
+  const isContractor = user.role === 'CONTRACTOR';
 
-  const budget   = Number(project.budget);
-  const raised   = investments.filter((i:any) => i.status === 'COMMITTED').reduce((s:any,i:any) => s + Number(i.amount), 0);
-  const fillPct  = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 100) : 0;
-  const riskGrade = RISK_GRADES[Math.floor(Math.random() * RISK_GRADES.length)];
-
-  const TABS = ['overview','financials','documents','team'];
+  const filteredProjects = projects.filter((p: any) => {
+    const matchesFilter = !filter || p.category === filter || p.country?.toLowerCase().includes(filter.toLowerCase());
+    return matchesFilter;
+  });
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col">
-      <Navbar/>
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full">
-
-        {/* back */}
-        <Link href="/investments" className="inline-flex items-center gap-2 text-[10px] text-zinc-500 hover:text-white uppercase font-bold tracking-widest mb-6 transition-colors">
-          <ArrowLeft size={12}/> Investment Nodes
-        </Link>
-
-        {/* ── hero ─────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 p-8 rounded-3xl border border-zinc-800 bg-zinc-900/30 space-y-4">
-            <div className="flex items-start gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-2xl flex-shrink-0">
-                {CAT_ICON[project.category] ?? '🏗️'}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <h1 className="text-2xl font-black tracking-tight uppercase">{project.title}</h1>
-                  {project.gov_verified && (
-                    <span className="flex items-center gap-1 text-[8px] px-2 py-0.5 rounded border border-teal-500/40 bg-teal-500/10 text-teal-500 font-bold uppercase">
-                      <ShieldCheck size={9}/> GOV VERIFIED
-                    </span>
-                  )}
-                  <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${
-                    project.status === 'ACTIVE' ? 'border-emerald-500/40 text-emerald-400' : 'border-zinc-700 text-zinc-500'
-                  }`}>{project.status}</span>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-zinc-500 flex-wrap">
-                  <span className="flex items-center gap-1"><MapPin size={11}/> {project.location}, {project.country}</span>
-                  <span className="flex items-center gap-1"><Building2 size={11}/> {project.category}</span>
-                  {project.timeline_months && <span className="flex items-center gap-1"><Calendar size={11}/> {project.timeline_months}mo timeline</span>}
-                </div>
-              </div>
-            </div>
-            <p className="text-zinc-400 text-sm leading-relaxed">{project.description}</p>
-            <div className="flex items-center gap-3 flex-wrap pt-2">
-              {['12% est. annual return','Tri-layer verification','Escrow-secured','SHA-256 ledger'].map(b => (
-                <span key={b} className="flex items-center gap-1 text-[9px] text-teal-500 border border-teal-500/30 bg-teal-500/5 px-2 py-1 rounded-lg font-bold uppercase tracking-widest">
-                  <CheckCircle2 size={8}/> {b}
-                </span>
-              ))}
-            </div>
+    <div className="min-h-screen bg-[#050505] text-white">
+      {bidProject && <BidModal project={bidProject} milestones={[]} onClose={() => setBidProject(null)} onSuccess={() => { setBidProject(null); mutate(); }} />}
+      {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} onSuccess={() => { setShowNewProject(false); mutate(); }} />}
+      <Navbar />
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        <header className="mb-8 border-l-2 border-teal-500 pl-6 flex justify-between items-center flex-wrap gap-4">
+          <div>
+            <p className="text-[10px] text-teal-500 uppercase font-bold tracking-[0.2em] mb-2">Infrastructure Feed</p>
+            <h1 className="text-4xl font-black tracking-tighter uppercase italic">Live Projects</h1>
           </div>
-
-          {/* investment CTA card */}
-          <div className="p-6 rounded-3xl border border-zinc-700 bg-zinc-900/50 space-y-5 flex flex-col">
-            <div>
-              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-1">Project Budget</p>
-              <p className="text-3xl font-black font-mono text-white">{format(budget)}</p>
-              <p className="text-zinc-600 text-[9px] font-mono">₦{(budget * 1381).toLocaleString(undefined,{maximumFractionDigits:0})} NGN</p>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest">
-                <span className="text-zinc-500">Capital Secured</span>
-                <span className="text-teal-500">{fillPct}%</span>
-              </div>
-              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all shadow-[0_0_8px_rgba(20,184,166,0.4)]" style={{width:`${fillPct}%`}}/>
-              </div>
-              <div className="flex justify-between text-[9px] text-zinc-600 font-mono">
-                <span>{format(raised)} raised</span>
-                <span>{investments.filter(i=>i.status==='COMMITTED').length} investors</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Risk Grade',    value: riskGrade,           color: 'text-emerald-400' },
-                { label: 'Annual Yield',  value: '12% est.',          color: 'text-teal-400' },
-                { label: 'Min. Invest',   value: '₦5,000',            color: 'text-white' },
-                { label: 'Tenure',        value: '24 months',         color: 'text-amber-400' },
-              ].map(s => (
-                <div key={s.label} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800">
-                  <p className="text-[8px] text-zinc-600 uppercase font-bold tracking-widest">{s.label}</p>
-                  <p className={`font-mono text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-                </div>
-              ))}
-            </div>
-            <Link href="/investments"
-              className="w-full py-4 bg-teal-500 text-black font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-teal-400 transition-all flex items-center justify-center gap-2 text-center mt-auto">
-              <CreditCard size={14}/> Fund This Project
-            </Link>
-            {project.gov_verified && (
-              <div className="flex items-center gap-2 text-[8px] text-zinc-600">
-                <ShieldCheck size={10} className="text-teal-500"/> Government verified · Ref: {project.verification_hash?.slice(0,16) ?? 'N/A'}…
-              </div>
+          <div className="flex gap-3">
+            <CurrencySelector currency={currency} onSelect={setCurrency} compact />
+            {isGovt && (
+              <button onClick={() => setShowNewProject(true)} className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-black font-bold uppercase text-[10px] rounded-xl hover:bg-teal-400 transition-all">
+                <Plus size={12} /> New Project
+              </button>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* ── tab nav ──────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1 border-b border-zinc-800 mb-6 overflow-x-auto">
-          {TABS.map(t => (
-            <button key={t} onClick={() => setTab(t as any)}
-              className={`px-5 py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${
-                tab === t ? 'border-teal-500 text-teal-500' : 'border-transparent text-zinc-500 hover:text-white'
-              }`}>{t}
-            </button>
-          ))}
-        </div>
-
-        {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
-        {tab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* gallery */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Site Visuals & Renders</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {MOCK_GALLERY.filter(g => g.type === 'render').map((g, i) => (
-                  <div key={i} className="rounded-xl overflow-hidden border border-zinc-800 relative group aspect-video">
-                    <img src={g.src} alt={g.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
-                    <div className="absolute inset-0 bg-black/50 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-[9px] text-white font-bold uppercase tracking-widest">{g.label}</p>
+        {isLoading ? (
+          <div className="py-20 text-center"><Loader2 className="animate-spin text-teal-500 mx-auto" size={28} /></div>
+        ) : (
+          <div className="grid gap-4">
+            {filteredProjects.map((project: any) => (
+              <div key={project.id} className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all">
+                <div className="flex flex-col md:flex-row justify-between gap-6">
+                  <div className="flex items-start gap-4 flex-1">
+                    <div className="h-12 w-12 rounded-xl bg-zinc-900 flex items-center justify-center border border-zinc-800 flex-shrink-0">
+                      <Briefcase className="text-teal-500" size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <Link href={`/projects/${project.id}`} className="font-bold text-base uppercase tracking-tight hover:text-teal-500 transition-colors flex items-center gap-2">
+                          {project.title} <ExternalLink size={14} className="opacity-50" />
+                        </Link>
+                        {project.gov_verified && <ShieldCheck size={12} className="text-teal-500" />}
+                      </div>
+                      <p className="text-zinc-500 text-xs">{project.location}, {project.country}</p>
+                      <p className="text-zinc-600 text-[10px] mt-1 line-clamp-2">{project.description}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-              <p className="text-[9px] text-zinc-600">3D architectural renders · Site master plans · Engineering schematics available in Documents tab.</p>
-            </div>
-
-            {/* milestones */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Project Milestones</h3>
-              {milestones.length === 0 && <p className="text-zinc-600 text-xs">No milestones published yet.</p>}
-              {milestones.map(m => {
-                const allOk = m.ai_status==='VERIFIED' && m.human_status==='VERIFIED' && m.drone_status==='VERIFIED';
-                const isOpen = expandedMs === m.id;
-                return (
-                  <div key={m.id} className={`rounded-xl border transition-all ${allOk ? 'border-teal-500/30 bg-teal-500/5' : m.status === 'PAID' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-zinc-800 bg-zinc-900/20'}`}>
-                    <button onClick={() => setExpandedMs(isOpen ? null : m.id)} className="w-full flex items-center justify-between p-4 text-left">
-                      <div className="flex items-center gap-3">
-                        <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[9px] font-black flex-shrink-0 ${
-                          m.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' :
-                          allOk ? 'bg-teal-500/20 text-teal-500' : 'bg-zinc-800 text-zinc-500'
-                        }`}>
-                          {m.status === 'PAID' ? <CheckCircle2 size={13}/> : allOk ? <ShieldCheck size={13}/> : <Clock size={13}/>}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-tight">{m.title}</p>
-                          <p className="text-[9px] text-zinc-500 font-mono">${Number(m.budget_allocation).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      {isOpen ? <ChevronUp size={14} className="text-zinc-500"/> : <ChevronDown size={14} className="text-zinc-500"/>}
-                    </button>
-                    {isOpen && (
-                      <div className="px-4 pb-4 space-y-2 border-t border-zinc-800/50">
-                        <p className="text-zinc-500 text-xs mt-3 leading-relaxed">{m.description}</p>
-                        <div className="flex gap-3 mt-2">
-                          {[
-                            { label: 'AI', status: m.ai_status },
-                            { label: 'Human', status: m.human_status },
-                            { label: 'Drone', status: m.drone_status },
-                          ].map(v => (
-                            <div key={v.label} className={`flex items-center gap-1 text-[8px] font-bold uppercase px-2 py-1 rounded-lg border ${
-                              v.status === 'VERIFIED' ? 'border-teal-500/40 text-teal-500 bg-teal-500/10' : 'border-zinc-700 text-zinc-500'
-                            }`}>
-                              <ShieldCheck size={8}/> {v.label}: {v.status}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-3">
-                          <div className="flex justify-between text-[8px] text-zinc-600 mb-1">
-                            <span>Progress</span><span>{m.progress_percentage ?? 0}%</span>
-                          </div>
-                          <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-teal-500" style={{width:`${m.progress_percentage ?? 0}%`}}/>
-                          </div>
-                        </div>
-                      </div>
+                  <div className="flex flex-col justify-between items-end gap-3 flex-shrink-0">
+                    <div className="text-right">
+                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Budget</p>
+                      <p className="font-mono text-lg font-bold text-white">{format(Number(project.budget))}</p>
+                    </div>
+                    {isContractor && (
+                      <button onClick={() => setBidProject(project)} className="flex items-center gap-2 px-5 py-3 bg-white text-black font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-teal-500 transition-all">
+                        <Activity size={12} /> Submit Bid
+                      </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── FINANCIALS ───────────────────────────────────────────────────── */}
-        {tab === 'financials' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Financial Breakdown</h3>
-              {[
-                { label: 'Total Project Budget',   value: format(budget), sub: `₦${(budget*1381).toLocaleString(undefined,{maximumFractionDigits:0})}`, hi: true },
-                { label: 'Capital Raised to Date', value: format(raised), sub: `${fillPct}% funded` },
-                { label: 'Remaining to Raise',     value: format(budget - raised), sub: 'Open for investment' },
-                { label: 'Estimated Annual Return',value: '12% p.a.',      sub: 'Over 24-month tenure' },
-                { label: 'Milestone Payouts',       value: milestones.length + ' tranches', sub: 'Released on verification' },
-              ].map(r => (
-                <div key={r.label} className="flex justify-between items-start py-3 border-b border-zinc-800/50">
-                  <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{r.label}</span>
-                  <div className="text-right">
-                    <p className={`font-mono text-sm font-bold ${r.hi ? 'text-teal-500' : 'text-white'}`}>{r.value}</p>
-                    <p className="text-[8px] text-zinc-600">{r.sub}</p>
-                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="space-y-4">
-              <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-4">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Escrow Mechanics</h3>
-                {[
-                  { n:'1', t:'Investor Funds via Paystack', d:'Capital enters Nested Ark escrow. Fully segregated, never co-mingled.' },
-                  { n:'2', t:'Milestone Gates', d:'Funds released per milestone. Each gate requires AI + Human + Drone sign-off.' },
-                  { n:'3', t:'Tri-Layer Verification', d:'AI risk model, Government human audit, and drone site footage all confirm progress.' },
-                  { n:'4', t:'SHA-256 Release Hash', d:'Each release creates an immutable cryptographic record on the ledger.' },
-                ].map(s => (
-                  <div key={s.n} className="flex gap-3">
-                    <div className="h-5 w-5 rounded-full bg-teal-500/20 border border-teal-500/30 text-teal-400 text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{s.n}</div>
-                    <div>
-                      <p className="text-[10px] font-bold text-white uppercase tracking-widest">{s.t}</p>
-                      <p className="text-[9px] text-zinc-500 mt-0.5 leading-relaxed">{s.d}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
-              <div className="p-5 rounded-2xl border border-teal-500/20 bg-teal-500/5 flex items-start gap-3">
-                <ShieldCheck size={15} className="text-teal-500 flex-shrink-0 mt-0.5"/>
-                <p className="text-zinc-400 text-xs leading-relaxed">
-                  All payments processed by <strong className="text-white">Impressions & Impacts Ltd</strong> via Paystack. Your bank statement will show "Impressions and Impacts Ltd".
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── DOCUMENTS ────────────────────────────────────────────────────── */}
-        {tab === 'documents' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MOCK_GALLERY.filter(g => g.type === 'doc').concat([
-                { type:'doc', label:'Site Survey & Geotechnical Report', ext:'PDF' },
-                { type:'doc', label:'Contractor Qualification Pack',     ext:'PDF' },
-              ]).map((doc, i) => (
-                <div key={i} className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 flex items-center gap-4 hover:border-zinc-700 transition-all">
-                  <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                    <FileText size={18} className="text-teal-500"/>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold truncate">{doc.label}</p>
-                    <p className="text-[8px] text-zinc-500 uppercase font-mono mt-0.5">{(doc as any).ext} · Government Issued</p>
-                  </div>
-                  <button className="text-[8px] text-teal-500 border border-teal-500/30 px-2 py-1 rounded-lg font-bold uppercase hover:bg-teal-500/10 transition-all">View</button>
-                </div>
-              ))}
-            </div>
-            <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 flex items-start gap-3">
-              <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5"/>
-              <p className="text-zinc-500 text-xs leading-relaxed">Full document access granted to KYC-verified investors. <Link href="/kyc" className="text-teal-500 hover:underline">Complete KYC →</Link></p>
-            </div>
-          </div>
-        )}
-
-        {/* ── TEAM ─────────────────────────────────────────────────────────── */}
-        {tab === 'team' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Project Principals</h3>
-              {[
-                { role: 'Government Sponsor', name: project.location + ' State Ministry of Works', badge: 'GOV', color: 'text-teal-500' },
-                { role: 'Lead Contractor', name: project.primary_supplier ?? 'Assigned upon bid award', badge: 'CONTR', color: 'text-amber-400' },
-                { role: 'Funding Bank', name: project.funding_bank ?? 'Open for bank tender', badge: 'BANK', color: 'text-purple-400' },
-                { role: 'Materials Supplier', name: project.vendor ?? 'Dangote Industries / Pending RFQ', badge: 'SUPP', color: 'text-blue-400' },
-              ].map(p => (
-                <div key={p.role} className="flex items-center gap-4 p-4 rounded-xl border border-zinc-800 bg-zinc-900/20">
-                  <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                    <Users size={16} className="text-zinc-500"/>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{p.role}</p>
-                    <p className="text-sm font-bold truncate">{p.name}</p>
-                  </div>
-                  <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${p.color} border-current`}>{p.badge}</span>
-                </div>
-              ))}
-            </div>
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Platform Guarantees</h3>
-              {[
-                { icon: ShieldCheck, t: 'Tri-Layer Verification',   d: 'Every milestone verified by AI + Government auditor + Drone footage before escrow release.' },
-                { icon: Hash,        t: 'Immutable Ledger',          d: 'SHA-256 hash chain records every transaction. Tamper-proof and publicly auditable.' },
-                { icon: Globe,       t: 'Government Authorization',  d: 'Projects require signed approval from the relevant government ministry before going live.' },
-                { icon: Award,       t: 'AML/KYC Compliance',        d: 'All investors undergo identity verification. Fully compliant with Nigerian financial regulations.' },
-              ].map(g => {
-                const Icon = g.icon;
-                return (
-                  <div key={g.t} className="flex items-start gap-3">
-                    <Icon size={15} className="text-teal-500 flex-shrink-0 mt-0.5"/>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest">{g.t}</p>
-                      <p className="text-[9px] text-zinc-500 mt-0.5 leading-relaxed">{g.d}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            ))}
           </div>
         )}
       </main>
-      <Footer/>
     </div>
   );
 }
