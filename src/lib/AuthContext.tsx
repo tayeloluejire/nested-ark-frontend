@@ -2,7 +2,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from './api';
 
-// UPDATED: Added SUPPLIER and BANK to the official roles
 export type UserRole = 'GOVERNMENT' | 'INVESTOR' | 'CONTRACTOR' | 'ADMIN' | 'VERIFIER' | 'SUPPLIER' | 'BANK';
 
 interface User { id: string; email: string; role: UserRole; full_name: string; }
@@ -15,14 +14,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// FIXED: Routing logic now handles all specialized infrastructure portals
 export function getRoleRoute(role: UserRole): string {
   if (role === 'ADMIN') return '/admin';
   if (role === 'GOVERNMENT') return '/admin/approval';
   if (role === 'INVESTOR') return '/investments';
   if (role === 'CONTRACTOR') return '/projects';
-  if (role === 'SUPPLIER') return '/projects'; // Suppliers manage inventory in project view
-  if (role === 'BANK') return '/ledger';      // Banks focus on capital verification
+  if (role === 'SUPPLIER') return '/supplier';   // Supplier Command Center
+  if (role === 'BANK') return '/bank';           // Bank Capital Ledger
   if (role === 'VERIFIER') return '/admin/approval';
   return '/dashboard';
 }
