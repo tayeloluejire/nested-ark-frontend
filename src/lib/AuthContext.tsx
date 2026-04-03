@@ -14,15 +14,43 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Single source of truth for post-login routing */
 export function getRoleRoute(role: UserRole): string {
-  if (role === 'ADMIN') return '/admin';
-  if (role === 'GOVERNMENT') return '/admin/approval';
-  if (role === 'INVESTOR') return '/investments';
-  if (role === 'CONTRACTOR') return '/projects';
-  if (role === 'SUPPLIER') return '/supplier';   // Supplier Command Center
-  if (role === 'BANK') return '/bank';           // Bank Capital Ledger
-  if (role === 'VERIFIER') return '/admin/approval';
-  return '/dashboard';
+  switch (role) {
+    case 'ADMIN':       return '/admin';
+    case 'GOVERNMENT':  return '/gov';        // ← dedicated Government portal
+    case 'INVESTOR':    return '/portfolio';   // ← Investor lands on portfolio
+    case 'CONTRACTOR':  return '/projects';
+    case 'SUPPLIER':    return '/supplier';
+    case 'BANK':        return '/bank';
+    case 'VERIFIER':    return '/admin/approval';
+    default:            return '/dashboard';
+  }
+}
+
+/** Page-level access guard — used by each page's useEffect */
+export function canAccess(role: UserRole, path: string): boolean {
+  if (role === 'ADMIN') return true;            // Admin sees everything
+  const rules: Record<string, UserRole[]> = {
+    '/admin':          ['ADMIN'],               // ADMIN ONLY for /admin/*
+    '/gov':            ['GOVERNMENT'],          // Government dedicated portal
+    '/portfolio':      ['INVESTOR'],
+    '/investments':    ['INVESTOR'],
+    '/supplier':       ['SUPPLIER'],
+    '/bank':           ['BANK'],
+    '/projects':       ['GOVERNMENT', 'CONTRACTOR', 'SUPPLIER', 'ADMIN'],
+    '/milestones':     ['GOVERNMENT', 'CONTRACTOR', 'ADMIN', 'VERIFIER'],
+    '/ledger':         ['ADMIN', 'GOVERNMENT', 'BANK', 'INVESTOR', 'VERIFIER'],
+    '/dashboard':      ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'GOVERNMENT', 'ADMIN', 'VERIFIER'],
+    '/kyc':            ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK'],
+    '/map':            ['INVESTOR', 'GOVERNMENT', 'ADMIN', 'BANK', 'CONTRACTOR'],
+  };
+  for (const [prefix, allowed] of Object.entries(rules)) {
+    if (path === prefix || path.startsWith(prefix + '/')) {
+      return (allowed as string[]).includes(role);
+    }
+  }
+  return true; // public routes
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -41,7 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    if (storedToken) { fetchUser(storedToken); } else { setIsLoading(false); }
+    if (storedToken) fetchUser(storedToken);
+    else setIsLoading(false);
   }, [fetchUser]);
 
   const login = async (email: string, password: string): Promise<string> => {
@@ -70,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
+  return ctx;
 }
