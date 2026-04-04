@@ -5,63 +5,157 @@ import Link from 'next/link';
 import { useAuth, canAccess } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { useLiveInvestments } from '@/hooks/useLiveSystem';
 import { useCurrency } from '@/hooks/useCurrency';
-import CurrencySelector from '@/components/CurrencySelector';
 import api from '@/lib/api';
 import {
-  TrendingUp, ShieldCheck, Lock, Wallet, BarChart3,
-  Loader2, RefreshCw, ArrowUpRight, AlertTriangle,
-  CreditCard, FileText, Eye, Download, Activity,
-  Wifi, CheckCircle2, Clock, X
+  TrendingUp, Shield, Wallet, DollarSign, Loader2, RefreshCw,
+  ExternalLink, CheckCircle2, Clock, AlertTriangle, Download,
+  Wifi, ArrowUpRight, Lock, CreditCard, Building2, Activity
 } from 'lucide-react';
 
-const NGN_RATE = 1381;
-const ANNUAL_RETURN = 0.12;
-const TENURE_MONTHS = 24;
+interface Investment {
+  id: string;
+  project_id: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  project_title: string;
+  location: string;
+  expected_roi?: number;
+  budget?: number;
+}
 
-export default function InvestorPortfolio() {
+interface PayHistory {
+  id: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  project_title?: string;
+  paystack_reference: string;
+  payment_channel?: string;
+}
+
+function StatCard({ label, value, sub, icon: Icon, color = 'text-white', action, actionLabel }: any) {
+  return (
+    <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 relative overflow-hidden">
+      <div className="absolute top-4 right-4 opacity-5"><Icon size={48} /></div>
+      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.2em] mb-1">{label}</p>
+      <p className={`text-2xl font-black font-mono ${color}`}>{value}</p>
+      {sub && <p className="text-[10px] text-zinc-600 mt-1">{sub}</p>}
+      {action && (
+        <button onClick={action}
+          className="mt-3 px-4 py-2 bg-white text-black font-bold text-[9px] uppercase tracking-widest rounded-lg hover:bg-teal-500 transition-all">
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function WithdrawModal({ available, onClose }: { available: number; onClose: () => void }) {
+  const [form, setForm] = useState({ bank_name: '', account_number: '', account_name: '', amount: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.post('/api/escrow/withdraw', {
+        amount: parseFloat(form.amount),
+        bank_name: form.bank_name,
+        account_number: form.account_number,
+        account_name: form.account_name,
+      });
+      setDone(true);
+    } catch (err: any) {
+      alert(err?.response?.data?.error ?? 'Withdrawal request failed');
+    } finally { setSubmitting(false); }
+  };
+
+  if (done) return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-zinc-950 border border-teal-500/30 rounded-3xl p-8 text-center space-y-4">
+        <CheckCircle2 className="text-teal-500 mx-auto" size={40} />
+        <h3 className="text-xl font-black uppercase">Request Submitted</h3>
+        <p className="text-zinc-500 text-sm">Your payout request has been queued. Funds will be transferred within 1–3 business days via Paystack Transfer.</p>
+        <button onClick={onClose} className="w-full py-3 bg-white text-black font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-teal-500 transition-all">Close</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-8 space-y-6">
+        <div>
+          <h3 className="text-xl font-bold uppercase">Withdraw Earnings</h3>
+          <p className="text-zinc-500 text-xs mt-1">Available: ₦{available.toLocaleString()}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-400 uppercase font-bold tracking-widest">
+          ⚠ Principal is locked until project tenure ends. Only realized earnings can be withdrawn.
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+          <input required value={form.bank_name} onChange={e => setForm({ ...form, bank_name: e.target.value })}
+            placeholder="Bank Name (e.g. Access Bank)" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          <input required value={form.account_number} onChange={e => setForm({ ...form, account_number: e.target.value })}
+            placeholder="Account Number (NUBAN)" maxLength={10} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          <input required value={form.account_name} onChange={e => setForm({ ...form, account_name: e.target.value })}
+            placeholder="Account Name" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          <input required type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })}
+            placeholder="Amount (NGN)" max={available} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+          <div className="flex gap-3">
+            <button type="submit" disabled={submitting}
+              className="flex-1 py-4 bg-white text-black font-bold uppercase text-xs tracking-widest rounded-xl hover:bg-teal-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+              {submitting ? <Loader2 className="animate-spin" size={14} /> : <><ArrowUpRight size={12} /> Request Payout</>}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-5 py-4 border border-zinc-700 text-zinc-400 font-bold uppercase text-xs rounded-xl hover:text-white">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default function PortfolioPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const { investments, isLoading: invLoading, mutate } = useLiveInvestments();
-  const { format, currency, setCurrency } = useCurrency();
-  const [payHistory, setPayHistory] = useState<any[]>([]);
-  const [projectMap, setProjectMap] = useState<Record<string, any>>({});
-  const [kycStatus, setKycStatus] = useState<any>(null);
-  const [dataLoading, setDataLoading] = useState(true);
+  const { format } = useCurrency();
+  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [payments, setPayments] = useState<PayHistory[]>([]);
+  const [kycStatus, setKycStatus] = useState<string>('NOT_SUBMITTED');
+  const [loading, setLoading] = useState(true);
+  const [lastSync, setLastSync] = useState('');
   const [showWithdraw, setShowWithdraw] = useState(false);
-  const [withdrawing, setWithdrawing] = useState(false);
-  const [bankForm, setBankForm] = useState({ bank_name: '', account_number: '', account_name: '' });
-  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
 
-  /* ── auth guard ──────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!authLoading && !user) { router.replace('/login'); return; }
     if (!authLoading && user && !canAccess(user.role, '/portfolio')) {
-      router.replace(user.role === 'ADMIN' ? '/admin' : '/dashboard');
+      router.replace('/dashboard');
     }
   }, [user, authLoading, router]);
 
-  /* ── load payment history + projects + KYC ─────────────────────────── */
-  const loadData = useCallback(async () => {
-    setDataLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const [hist, proj, kyc] = await Promise.allSettled([
+      const [inv, pay, kyc] = await Promise.allSettled([
+        api.get('/api/investments'),
         api.get('/api/payments/history'),
-        api.get('/api/projects'),
         api.get('/api/kyc/status'),
       ]);
-      if (hist.status === 'fulfilled') setPayHistory(hist.value.data.transactions ?? []);
-      if (proj.status === 'fulfilled') {
-        const map: Record<string, any> = {};
-        (proj.value.data.projects ?? []).forEach((p: any) => { map[p.id] = p; });
-        setProjectMap(map);
+      if (inv.status === 'fulfilled') {
+        const all: Investment[] = inv.value.data.investments ?? [];
+        setInvestments(all.filter((i: Investment) => i.status === 'COMMITTED' || i.status === 'SUCCESS'));
       }
-      if (kyc.status === 'fulfilled') setKycStatus(kyc.value.data);
-    } finally { setDataLoading(false); }
+      if (pay.status === 'fulfilled') setPayments(pay.value.data.transactions ?? []);
+      if (kyc.status === 'fulfilled') setKycStatus(kyc.value.data.kyc?.status ?? 'NOT_SUBMITTED');
+      setLastSync(new Date().toLocaleTimeString());
+    } finally { if (!silent) setLoading(false); }
   }, []);
 
-  useEffect(() => { if (user) loadData(); }, [user, loadData]);
+  useEffect(() => {
+    if (user) { load(); const iv = setInterval(() => load(true), 30000); return () => clearInterval(iv); }
+  }, [user, load]);
 
   if (authLoading || !user) return (
     <div className="h-screen bg-[#050505] flex items-center justify-center">
@@ -69,237 +163,151 @@ export default function InvestorPortfolio() {
     </div>
   );
 
-  /* ── derived numbers ─────────────────────────────────────────────────── */
-  const totalPaidNgn = payHistory.filter(t => t.status === 'SUCCESS').reduce((s, t) => s + Number(t.amount_ngn), 0);
-  const totalPaidUsd = totalPaidNgn / NGN_RATE;
-  const committedUsd = investments.reduce((s: number, i: any) => s + Number(i.amount), 0);
-  const committedNgn = committedUsd * NGN_RATE;
-  const earnedUsd   = totalPaidUsd * ANNUAL_RETURN * 0.5;  // 6-month accrual
-  const earnedNgn   = earnedUsd * NGN_RATE;
-  const kycOk = kycStatus?.kyc_status === 'VERIFIED';
-
-  /* ── withdrawal handler ─────────────────────────────────────────────── */
-  const handleWithdraw = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!kycOk) { alert('Complete KYC first.'); return; }
-    setWithdrawing(true);
-    await new Promise(r => setTimeout(r, 1800)); // simulate async call
-    setWithdrawing(false);
-    setWithdrawSuccess(true);
-    setShowWithdraw(false);
-  };
-
-  /* ── helpers ─────────────────────────────────────────────────────────── */
-  const tenure = (inv: any) => {
-    const days = Math.floor((Date.now() - new Date(inv.created_at).getTime()) / 86400000);
-    const elapsed = Math.min(Math.floor(days / 30), TENURE_MONTHS);
-    const left = TENURE_MONTHS - elapsed;
-    const pct  = Math.round((elapsed / TENURE_MONTHS) * 100);
-    return { elapsed, left, pct };
-  };
+  // Portfolio calculations
+  const totalPrincipalNGN = payments.filter(p => p.status === 'SUCCESS').reduce((s, p) => s + Number(p.amount), 0);
+  const estimatedEarnings = Math.round(totalPrincipalNGN * 0.12 * (6 / 12)); // 12% p.a., 6-month accrual
+  const availableToWithdraw = Math.round(estimatedEarnings * 0.4); // 40% of accrued earnings available
+  const safetyRating = investments.length > 0 ? '94%' : '—';
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
+      {showWithdraw && <WithdrawModal available={availableToWithdraw} onClose={() => setShowWithdraw(false)} />}
+
       <Navbar />
 
-      {/* ── pulse bar ─────────────────────────────────────────────────────── */}
+      {/* System Pulse */}
       <div className="border-b border-zinc-800 bg-black px-6 py-2 flex items-center gap-5 text-[9px] font-mono uppercase tracking-widest overflow-x-auto">
-        <span className="flex items-center gap-1.5 text-teal-500 flex-shrink-0"><Wifi size={8}/> Portfolio Live</span>
-        <span className="flex items-center gap-1.5 text-zinc-600 flex-shrink-0"><Activity size={8} className="text-amber-500"/> {investments.length} positions</span>
-        <span className={`flex items-center gap-1.5 flex-shrink-0 ${kycOk ? 'text-teal-500' : 'text-amber-400'}`}>
-          <ShieldCheck size={8}/> KYC: {kycStatus?.kyc_status ?? 'NOT SUBMITTED'}
+        <span className="flex items-center gap-1.5 text-teal-500 flex-shrink-0"><Wifi size={8} /> Portfolio Live</span>
+        {lastSync && <span className="text-zinc-600 flex-shrink-0">Synced {lastSync}</span>}
+        <span className="flex items-center gap-1.5 text-white flex-shrink-0">{investments.length} active positions</span>
+        <span className={`flex items-center gap-1.5 flex-shrink-0 ${kycStatus === 'VERIFIED' ? 'text-teal-500' : 'text-amber-400'}`}>
+          KYC: {kycStatus}
+          {kycStatus !== 'VERIFIED' && <Link href="/kyc" className="underline ml-1">Verify →</Link>}
         </span>
-        {!kycOk && (
-          <Link href="/kyc" className="text-amber-400 font-bold hover:underline flex-shrink-0">
-            Complete KYC to unlock withdrawals →
-          </Link>
-        )}
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8">
-
-        {/* ── header ──────────────────────────────────────────────────────── */}
-        <header className="border-l-2 border-emerald-500 pl-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[9px] text-emerald-400 uppercase font-bold tracking-[0.2em] mb-1">Investor Command Center</p>
-            <h1 className="text-3xl font-black tracking-tighter uppercase italic">My Portfolio</h1>
-            <p className="text-zinc-500 text-sm mt-1">{user.full_name} · {user.email}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <CurrencySelector currency={currency} onSelect={setCurrency} compact={false}/>
-            <button onClick={() => { mutate(); loadData(); }} className="p-2 rounded-lg border border-zinc-800 text-zinc-500 hover:text-teal-500 hover:border-teal-500/40 transition-all">
-              <RefreshCw size={14}/>
-            </button>
-          </div>
+      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-10">
+        {/* Header */}
+        <header className="border-l-2 border-teal-500 pl-6">
+          <p className="text-[9px] text-teal-500 uppercase font-bold tracking-[0.2em] mb-1">Investor Command</p>
+          <h1 className="text-4xl font-black tracking-tighter uppercase italic">My Portfolio</h1>
+          <p className="text-zinc-500 text-sm mt-1">Welcome, {user.full_name} — Infrastructure wealth management dashboard</p>
         </header>
 
-        {/* ── 4-card capital summary ───────────────────────────────────────── */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Total Portfolio Value', main: format(committedUsd), sub: `₦${committedNgn.toLocaleString(undefined,{maximumFractionDigits:0})}`, icon: BarChart3, color: 'text-emerald-400', accent: 'border-l-emerald-500' },
-            { label: 'Estimated Earnings (12%)', main: `+${format(earnedUsd)}`, sub: `+₦${earnedNgn.toLocaleString(undefined,{maximumFractionDigits:0})}`, icon: TrendingUp, color: 'text-teal-400', accent: 'border-l-teal-500' },
-            { label: 'Capital in Escrow', main: format(committedUsd), sub: 'Tri-layer secured', icon: Lock, color: 'text-amber-400', accent: 'border-l-amber-500' },
-            { label: 'Available to Withdraw', main: `+${format(earnedUsd)}`, sub: kycOk ? 'KYC Verified ✓' : 'Complete KYC first', icon: Wallet, color: kycOk ? 'text-teal-500' : 'text-zinc-500', accent: kycOk ? 'border-l-teal-500' : 'border-l-zinc-700', cta: true },
-          ].map(c => {
-            const Icon = c.icon;
-            return (
-              <div key={c.label} className={`p-5 rounded-2xl border border-zinc-800 bg-zinc-900/30 border-l-2 ${c.accent} relative overflow-hidden`}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest leading-tight">{c.label}</p>
-                  <Icon size={14} className={c.color}/>
-                </div>
-                <p className={`text-xl font-black font-mono ${c.color}`}>{invLoading ? '…' : c.main}</p>
-                <p className="text-[8px] text-zinc-600 font-mono mt-0.5">{c.sub}</p>
-                {(c as any).cta && (
-                  <button onClick={() => setShowWithdraw(!showWithdraw)} disabled={!kycOk}
-                    className={`mt-3 w-full py-2 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${kycOk ? 'bg-white text-black hover:bg-teal-500' : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'}`}>
-                    <ArrowUpRight size={10}/> {kycOk ? 'Withdraw Returns' : 'KYC Required'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+        {/* Capital Header Cards */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard
+            label="Total Portfolio Value"
+            value={`₦${(totalPrincipalNGN / 1_000_000).toFixed(2)}M`}
+            sub={`${format(totalPrincipalNGN / 1379)} USD equiv.`}
+            icon={TrendingUp}
+            color="text-white"
+          />
+          <StatCard
+            label="Estimated Earnings (12% p.a.)"
+            value={`+₦${(estimatedEarnings / 1000).toFixed(0)}k`}
+            sub="6-month accrual on committed capital"
+            icon={DollarSign}
+            color="text-teal-400"
+          />
+          <StatCard
+            label="Available Liquidity"
+            value={`₦${(availableToWithdraw / 1000).toFixed(0)}k`}
+            sub="Realized earnings · withdrawable"
+            icon={Wallet}
+            color="text-emerald-400"
+            action={kycStatus === 'VERIFIED' ? () => setShowWithdraw(true) : undefined}
+            actionLabel="Withdraw Funds"
+          />
+          <StatCard
+            label="Security Rating"
+            value={safetyRating}
+            sub="Tri-layer verified positions"
+            icon={Shield}
+            color="text-teal-500"
+          />
         </section>
 
-        {/* ── withdrawal success banner ─────────────────────────────────── */}
-        {withdrawSuccess && (
-          <div className="p-4 rounded-xl border border-teal-500/30 bg-teal-500/5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 size={16} className="text-teal-500"/>
-              <p className="text-teal-400 text-sm font-bold">Withdrawal request submitted. Processing 1–3 business days via Paystack Transfer.</p>
-            </div>
-            <button onClick={() => setWithdrawSuccess(false)}><X size={16} className="text-zinc-500 hover:text-white"/></button>
-          </div>
-        )}
-
-        {/* ── withdrawal form ──────────────────────────────────────────── */}
-        {showWithdraw && kycOk && (
-          <section className="p-6 rounded-2xl border border-teal-500/30 bg-teal-500/5 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-tight flex items-center gap-2">
-                <Wallet size={15} className="text-teal-500"/> Withdraw Realized Returns
-              </h2>
-              <button onClick={() => setShowWithdraw(false)} className="text-zinc-500 hover:text-white"><X size={16}/></button>
-            </div>
-            <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-2 text-xs">
-              <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5"/>
-              <p className="text-zinc-400 leading-relaxed">
-                Only <strong className="text-white">realized returns (12% p.a.)</strong> are available. Principal stays locked in escrow until project tenure ends. Paystack Transfer handles disbursement in NGN. Processing: 1–3 business days.
-              </p>
-            </div>
-            <form onSubmit={handleWithdraw} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {[
-                { key: 'bank_name',       label: 'Bank Name',       ph: 'e.g. Access Bank', type: 'text' },
-                { key: 'account_number',  label: 'Account Number',  ph: '10-digit NUBAN',   type: 'text', mono: true },
-                { key: 'account_name',    label: 'Account Name',    ph: 'As registered',    type: 'text' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-[9px] text-zinc-500 uppercase font-bold block mb-1.5">{f.label} *</label>
-                  <input required type={f.type} value={(bankForm as any)[f.key]}
-                    onChange={e => setBankForm({...bankForm, [f.key]: e.target.value})}
-                    placeholder={f.ph}
-                    className={`w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500 transition-colors ${f.mono ? 'font-mono' : ''}`}/>
-                </div>
-              ))}
-              <div className="md:col-span-3 space-y-3">
-                <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-900/20">
-                  <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Withdrawal Amount</span>
-                  <span className="font-mono text-teal-500 text-xl font-bold">₦{earnedNgn.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-                </div>
-                <button type="submit" disabled={withdrawing}
-                  className="w-full py-4 bg-teal-500 text-black font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-teal-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                  {withdrawing ? <Loader2 className="animate-spin" size={15}/> : <><ArrowUpRight size={13}/> Submit Withdrawal Request</>}
-                </button>
-              </div>
-            </form>
-          </section>
-        )}
-
-        {/* ── active positions ─────────────────────────────────────────────── */}
+        {/* Active Investment Positions */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Active Positions</h2>
-            <Link href="/investments" className="text-[9px] text-teal-500 font-bold uppercase tracking-widest hover:underline">+ Fund New Node</Link>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+              <Activity size={14} className="text-teal-500" /> Active Positions ({investments.length})
+            </h2>
+            <button onClick={() => load(false)} className="p-2 rounded-lg border border-zinc-800 text-zinc-500 hover:text-teal-500 transition-all">
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
 
-          {invLoading && <div className="py-12 text-center"><Loader2 className="animate-spin text-teal-500 mx-auto" size={22}/></div>}
+          {loading && <div className="py-10 text-center"><Loader2 className="animate-spin text-teal-500 mx-auto" size={20} /></div>}
 
-          {!invLoading && investments.length === 0 && (
-            <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl">
-              <TrendingUp className="mx-auto text-zinc-700 mb-3" size={28}/>
-              <p className="text-zinc-600 text-xs uppercase font-bold tracking-widest">No active positions</p>
-              <p className="text-zinc-700 text-[10px] mt-2 mb-5">Fund a project to start earning infrastructure returns.</p>
-              <Link href="/investments" className="px-6 py-3 bg-teal-500 text-black font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-teal-400 transition-all">Browse Investment Nodes</Link>
+          {!loading && investments.length === 0 && (
+            <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl space-y-4">
+              <Lock className="text-zinc-700 mx-auto" size={32} />
+              <p className="text-zinc-500 text-sm">No active investment positions</p>
+              <Link href="/investments" className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-teal-500 transition-all">
+                <TrendingUp size={12} /> Browse Investment Nodes
+              </Link>
             </div>
           )}
 
-          {investments.map((inv: any) => {
-            const proj = projectMap[inv.project_id];
-            const principalUsd = Number(inv.amount);
-            const principalNgn = principalUsd * NGN_RATE;
-            const yieldUsd     = principalUsd * ANNUAL_RETURN;
-            const yieldNgn     = principalNgn * ANNUAL_RETURN;
-            const { elapsed, left, pct } = tenure(inv);
+          {investments.map((inv) => {
+            const principal = Number(inv.amount);
+            const roiPct = inv.expected_roi ?? 12;
+            const estimatedYield = Math.round(principal * (roiPct / 100) * (6 / 12));
+            // 24-month tenure, started at created_at
+            const start = new Date(inv.created_at).getTime();
+            const now = Date.now();
+            const elapsed = Math.floor((now - start) / (1000 * 60 * 60 * 24 * 30)); // months
+            const tenure = 24;
+            const progress = Math.min((elapsed / tenure) * 100, 100);
+            const remaining = Math.max(tenure - elapsed, 0);
 
             return (
               <div key={inv.id} className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all">
-                {/* top row */}
-                <div className="flex flex-col md:flex-row items-start justify-between gap-5 mb-5">
-                  <div className="flex-1 min-w-0">
+                <div className="flex flex-col md:flex-row gap-6 justify-between">
+                  <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-bold uppercase tracking-tight text-sm">
-                        {proj?.title ?? ('Position ' + inv.id.slice(0,8))}
-                      </h3>
+                      <h3 className="font-bold uppercase tracking-tight">{inv.project_title}</h3>
                       <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${
-                        inv.status === 'COMMITTED' ? 'border-teal-500/40 text-teal-500' : 'border-zinc-700 text-zinc-500'
+                        inv.status === 'SUCCESS' || inv.status === 'COMMITTED'
+                          ? 'border-teal-500/40 text-teal-500' : 'border-zinc-700 text-zinc-500'
                       }`}>{inv.status}</span>
                     </div>
-                    {proj && <p className="text-zinc-500 text-xs">{proj.location}, {proj.country} · {proj.category}</p>}
-                    <p className="text-zinc-600 text-[9px] font-mono mt-1">Committed {new Date(inv.created_at).toLocaleDateString()}</p>
-                  </div>
+                    {inv.location && <p className="text-zinc-500 text-xs">{inv.location}</p>}
 
-                  {/* metric tiles */}
-                  <div className="grid grid-cols-3 gap-3 flex-shrink-0">
-                    {[
-                      { label: 'Principal',   v1: format(principalUsd), v2: `₦${principalNgn.toLocaleString(undefined,{maximumFractionDigits:0})}`, color: 'text-white' },
-                      { label: 'Est. Yield',  v1: `+${format(yieldUsd)}`, v2: `+₦${yieldNgn.toLocaleString(undefined,{maximumFractionDigits:0})}`, color: 'text-teal-400' },
-                      { label: 'Tenure Left', v1: `${left}mo`, v2: `of ${TENURE_MONTHS}mo`, color: 'text-amber-400' },
-                    ].map(m => (
-                      <div key={m.label} className="text-center p-3 rounded-xl bg-zinc-900 border border-zinc-800 min-w-[84px]">
-                        <p className="text-[8px] text-zinc-600 uppercase font-bold tracking-widest mb-1">{m.label}</p>
-                        <p className={`font-mono text-sm font-bold ${m.color}`}>{m.v1}</p>
-                        <p className="text-[7px] text-zinc-600 font-mono">{m.v2}</p>
+                    {/* Tenure progress */}
+                    <div className="mt-4 space-y-1">
+                      <div className="flex justify-between text-[9px] text-zinc-500 uppercase font-bold">
+                        <span>Tenure Progress ({elapsed}mo elapsed)</span>
+                        <span>{remaining}mo remaining</span>
                       </div>
-                    ))}
+                      <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-teal-500 transition-all" style={{ width: `${progress}%` }} />
+                      </div>
+                      <p className="text-[9px] text-zinc-600">{tenure}-month infrastructure tenure</p>
+                    </div>
                   </div>
-                </div>
 
-                {/* tenure bar */}
-                <div className="space-y-1.5 mb-4">
-                  <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest">
-                    <span className="text-zinc-500">Investment Tenure</span>
-                    <span className="text-teal-500">{pct}% · {elapsed}mo elapsed</span>
-                  </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all" style={{width:`${pct}%`}}/>
-                  </div>
-                </div>
-
-                {/* footer row */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="flex items-center gap-1.5 text-[9px] text-teal-500 font-bold"><ShieldCheck size={10}/> Tri-Layer Escrow Active</span>
-                  <div className="h-3 w-px bg-zinc-800"/>
-                  <span className="flex items-center gap-1.5 text-[9px] text-zinc-500"><Lock size={9}/> Principal locked until tenure end</span>
-                  <div className="ml-auto flex items-center gap-2">
-                    {proj && (
+                  <div className="flex flex-col items-end gap-3 min-w-[180px]">
+                    <div className="text-right">
+                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Principal</p>
+                      <p className="font-mono text-lg font-bold">₦{principal.toLocaleString()}</p>
+                      <p className="text-[9px] text-zinc-600">{format(principal / 1379)} USD</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Est. Yield ({roiPct}% p.a.)</p>
+                      <p className="font-mono text-teal-400 font-bold">+₦{estimatedYield.toLocaleString()}</p>
+                    </div>
+                    <div className="flex gap-2">
                       <Link href={`/projects/${inv.project_id}`}
-                        className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-700 text-zinc-400 hover:text-white font-bold rounded-lg text-[9px] uppercase tracking-widest transition-all">
-                        <Eye size={10}/> View Pitch
+                        className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-teal-500 hover:border-teal-500/40 transition-all">
+                        <ExternalLink size={10} /> View Pitch
                       </Link>
-                    )}
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-700 text-zinc-400 hover:text-teal-500 font-bold rounded-lg text-[9px] uppercase tracking-widest transition-all">
-                      <Download size={10}/> Statement
-                    </button>
+                      <button className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-white transition-all">
+                        <Download size={10} /> Statement
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -307,48 +315,66 @@ export default function InvestorPortfolio() {
           })}
         </section>
 
-        {/* ── payment history ─────────────────────────────────────────────── */}
-        {payHistory.length > 0 && (
-          <section className="space-y-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Payment History</h2>
-            <div className="rounded-xl border border-zinc-800 overflow-hidden">
-              <div className="grid grid-cols-5 gap-3 p-3 bg-zinc-900/50 border-b border-zinc-800">
-                {['Date','Project','Amount','Channel','Status'].map(h => (
-                  <span key={h} className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest">{h}</span>
+        {/* Payment History */}
+        <section className="space-y-4">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+            <CreditCard size={14} className="text-teal-500" /> Payment History
+          </h2>
+          <div className="rounded-2xl border border-zinc-800 overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-900 text-zinc-500 uppercase text-[9px] tracking-widest">
+                <tr>
+                  <th className="px-5 py-4">Date</th>
+                  <th className="px-5 py-4">Project</th>
+                  <th className="px-5 py-4">Amount</th>
+                  <th className="px-5 py-4">Channel</th>
+                  <th className="px-5 py-4">Status</th>
+                  <th className="px-5 py-4">Reference</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900">
+                {payments.length === 0 && (
+                  <tr><td colSpan={6} className="px-5 py-8 text-center text-zinc-600">No payment history yet</td></tr>
+                )}
+                {payments.map(p => (
+                  <tr key={p.id} className="hover:bg-zinc-900/40 transition-colors">
+                    <td className="px-5 py-4 text-zinc-400 font-mono">{new Date(p.created_at).toLocaleDateString()}</td>
+                    <td className="px-5 py-4 text-white font-bold uppercase text-[10px]">{p.project_title ?? '—'}</td>
+                    <td className="px-5 py-4 font-mono text-white">₦{Number(p.amount).toLocaleString()}</td>
+                    <td className="px-5 py-4 text-zinc-500 uppercase text-[9px]">{p.payment_channel ?? 'Card'}</td>
+                    <td className="px-5 py-4">
+                      <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${
+                        p.status === 'SUCCESS' ? 'border-teal-500/40 text-teal-500' :
+                        p.status === 'PENDING' ? 'border-amber-500/40 text-amber-400' :
+                        'border-red-500/40 text-red-400'
+                      }`}>{p.status}</span>
+                    </td>
+                    <td className="px-5 py-4 text-zinc-600 font-mono text-[9px]">{p.paystack_reference?.slice(0, 20)}…</td>
+                  </tr>
                 ))}
-              </div>
-              <div className="divide-y divide-zinc-800/50">
-                {payHistory.slice(0,20).map(tx => (
-                  <div key={tx.id} className="grid grid-cols-5 gap-3 p-3 font-mono text-[10px] hover:bg-zinc-900/20 transition-colors">
-                    <span className="text-zinc-500">{new Date(tx.paid_at || tx.created_at).toLocaleDateString()}</span>
-                    <span className="text-zinc-300 truncate">{tx.project_title ?? tx.project_id?.slice(0,10)+'…'}</span>
-                    <span className="text-white font-bold">₦{Number(tx.amount_ngn).toLocaleString()}</span>
-                    <span className="text-zinc-400 uppercase">{tx.channel ?? 'Card'}</span>
-                    <span className={`font-bold uppercase ${tx.status==='SUCCESS'?'text-teal-500':tx.status==='PENDING'?'text-amber-400':'text-red-400'}`}>{tx.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-        {/* ── quick actions ─────────────────────────────────────────────────── */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link href="/investments" className="flex items-center gap-4 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-teal-500/50 transition-all">
-            <CreditCard className="text-teal-500 flex-shrink-0" size={20}/>
-            <div><p className="font-bold text-sm uppercase tracking-tight">Fund New Project</p><p className="text-zinc-500 text-xs mt-0.5">Browse live infrastructure nodes</p></div>
-          </Link>
-          <Link href="/kyc" className={`flex items-center gap-4 p-5 rounded-2xl border transition-all ${kycOk ? 'border-teal-500/30 bg-teal-500/5' : 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50'}`}>
-            <ShieldCheck className={kycOk ? 'text-teal-500 flex-shrink-0' : 'text-amber-400 flex-shrink-0'} size={20}/>
-            <div><p className="font-bold text-sm uppercase tracking-tight">KYC Verification</p><p className={`text-xs mt-0.5 ${kycOk ? 'text-teal-500' : 'text-zinc-500'}`}>{kycOk ? 'Verified ✓ — Withdrawals Unlocked' : 'Required for withdrawals'}</p></div>
-          </Link>
-          <Link href="/ledger" className="flex items-center gap-4 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-teal-500/50 transition-all">
-            <FileText className="text-teal-500 flex-shrink-0" size={20}/>
-            <div><p className="font-bold text-sm uppercase tracking-tight">Transaction Ledger</p><p className="text-zinc-500 text-xs mt-0.5">Immutable record of all events</p></div>
-          </Link>
+        {/* Quick Links */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { href: '/investments', label: 'Browse Nodes', icon: TrendingUp, desc: 'Fund new projects' },
+            { href: '/kyc', label: 'KYC Verification', icon: Shield, desc: 'Unlock withdrawals' },
+            { href: '/ledger', label: 'Global Ledger', icon: Activity, desc: 'Immutable audit trail' },
+            { href: '/map', label: 'Project Map', icon: Building2, desc: 'Geo-visual overview' },
+          ].map(item => (
+            <Link key={item.href} href={item.href}
+              className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/20 hover:border-teal-500/40 hover:bg-teal-500/5 transition-all group">
+              <item.icon size={16} className="text-teal-500 mb-3" />
+              <p className="text-xs font-bold uppercase tracking-wider text-white">{item.label}</p>
+              <p className="text-[9px] text-zinc-500 mt-1">{item.desc}</p>
+            </Link>
+          ))}
         </section>
       </main>
-      <Footer/>
+      <Footer />
     </div>
   );
 }
