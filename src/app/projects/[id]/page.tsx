@@ -1,415 +1,387 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useAuth } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useCurrency } from '@/hooks/useCurrency';
 import api from '@/lib/api';
 import {
-  ShieldCheck, TrendingUp, FileText, Users, Building2, Loader2,
-  MapPin, Calendar, BarChart3, Lock, CheckCircle2, ArrowUpRight,
-  ChevronRight, Globe, Download, Eye, AlertTriangle, Wifi, DollarSign
+  MapPin, Calendar, DollarSign, Building2, ShieldCheck,
+  CheckCircle2, Clock, AlertCircle, Loader2, ArrowLeft,
+  FileText, TrendingUp, Users, Image as ImageIcon,
+  Globe, Cpu, Zap, CreditCard, ChevronDown, ChevronUp,
+  BarChart3, Target, Award, Hash
 } from 'lucide-react';
 
-type Tab = 'overview' | 'financials' | 'documents' | 'team';
-
-const MOCK_IMAGES = [
-  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80',
-  'https://images.unsplash.com/photo-1587293852726-70cdb56c2866?w=800&q=80',
-  'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=800&q=80',
+const CAT_ICON: Record<string,string> = {
+  Roads:'🛣️', Energy:'⚡', Water:'💧', Bridges:'🌉', Technology:'💻', Railways:'🚆', Ports:'⚓', Healthcare:'🏥'
+};
+const MOCK_GALLERY = [
+  { type:'render', label:'Site Master Plan', src:'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&q=80' },
+  { type:'render', label:'3D Elevation View', src:'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80' },
+  { type:'doc',    label:'Environmental Impact Assessment', ext:'PDF' },
+  { type:'doc',    label:'Government Approval Letter',     ext:'PDF' },
+  { type:'doc',    label:'Financial Model & Projections',  ext:'XLSX' },
+  { type:'doc',    label:'Engineering Feasibility Report', ext:'PDF' },
 ];
-
-const MOCK_FLOOR_PLANS = [
-  'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&q=80',
-  'https://images.unsplash.com/photo-1565008576549-57569a49371d?w=800&q=80',
-];
+const RISK_GRADES = ['AAA','AA','A','BBB'];
 
 export default function ProjectPitchPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { format } = useCurrency();
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject]     = useState<any>(null);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [investments, setInvestments] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
-  const [activeImg, setActiveImg] = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [tab, setTab]             = useState<'overview'|'financials'|'documents'|'team'>('overview');
+  const [expandedMs, setExpandedMs] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) { router.replace('/login'); return; }
+    if (!authLoading && !user) router.replace('/login');
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
     if (!id) return;
     (async () => {
+      setLoading(true);
       try {
         const [p, m, inv] = await Promise.allSettled([
           api.get(`/api/projects/${id}`),
-          api.get(`/api/milestones?project_id=${id}`),
-          api.get('/api/investments'),
+          api.get(`/api/milestones/project/${id}`),
+          api.get(`/api/investments?project_id=${id}`),
         ]);
         if (p.status === 'fulfilled') setProject(p.value.data.project ?? p.value.data);
         if (m.status === 'fulfilled') setMilestones(m.value.data.milestones ?? []);
-        if (inv.status === 'fulfilled') {
-          const all = inv.value.data.investments ?? [];
-          setInvestments(all.filter((i: any) => i.project_id === id));
-        }
-        // mock documents — replace with real API when available
-        setDocuments([
-          { id: '1', doc_type: 'GOVT_APPROVAL', title: 'Federal Ministry of Works — Project Authorization', is_public: true, requires_kyc: false, description: 'Official government approval letter and project mandate document.' },
-          { id: '2', doc_type: 'EIA', title: 'Environmental Impact Assessment Report', is_public: true, requires_kyc: false, description: 'Full EIA conducted by certified environmental consultants.' },
-          { id: '3', doc_type: 'FEASIBILITY', title: 'Technical Feasibility & ROI Analysis', is_public: false, requires_kyc: true, description: 'Detailed engineering feasibility study with cost projections and IRR calculations.' },
-          { id: '4', doc_type: 'FLOOR_PLAN', title: 'Site Layout & Infrastructure Drawings', is_public: false, requires_kyc: true, description: 'Certified engineering drawings, CAD layouts, and site blueprints.' },
-          { id: '5', doc_type: 'CONTRACTOR_PACK', title: 'Contractor Qualification & Tender Documents', is_public: false, requires_kyc: true, description: 'Contractor vetting files, bill of quantities, and scope of work.' },
-        ]);
+        if (inv.status === 'fulfilled') setInvestments(inv.value.data.investments ?? []);
       } finally { setLoading(false); }
     })();
-  }, [id, user, authLoading, router]);
+  }, [id]);
 
-  if (authLoading || loading || !project) return (
+  if (authLoading || loading) return (
     <div className="h-screen bg-[#050505] flex items-center justify-center">
-      <Loader2 className="animate-spin text-teal-500" size={32} />
+      <Loader2 className="animate-spin text-teal-500" size={32}/>
+    </div>
+  );
+  if (!project) return (
+    <div className="h-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
+      <AlertCircle className="text-red-400" size={32}/>
+      <p className="text-zinc-400">Project not found.</p>
+      <Link href="/investments" className="text-teal-500 hover:underline text-sm">← Back to Investments</Link>
     </div>
   );
 
-  const totalInvested = investments.reduce((s: number, i: any) => s + Number(i.amount), 0);
-  const budget = Number(project.budget);
-  const fundingPct = budget > 0 ? Math.min((totalInvested / budget) * 100, 100) : 0;
-  const roiPct = project.expected_roi ?? 12;
-  const milestonesPaid = milestones.filter(m => m.status === 'PAID').length;
-  const isKycVerified = true; // TODO: check real KYC from context/API
+  const budget   = Number(project.budget);
+  const raised   = investments.filter((i:any) => i.status === 'COMMITTED').reduce((s:any,i:any) => s + Number(i.amount), 0);
+  const fillPct  = budget > 0 ? Math.min(Math.round((raised / budget) * 100), 100) : 0;
+  const riskGrade = RISK_GRADES[Math.floor(Math.random() * RISK_GRADES.length)];
 
-  const docTypeLabel: Record<string, string> = {
-    GOVT_APPROVAL: '🏛 Govt Approval',
-    EIA: '🌿 EIA Report',
-    FEASIBILITY: '📊 Feasibility',
-    FLOOR_PLAN: '📐 Floor Plan',
-    CONTRACTOR_PACK: '📁 Contractor Pack',
-    '3D_MODEL': '🏗 3D Model',
-  };
-
-  const tabs: { id: Tab; label: string; icon: any }[] = [
-    { id: 'overview',   label: 'Overview',    icon: Eye },
-    { id: 'financials', label: 'Financials',  icon: BarChart3 },
-    { id: 'documents',  label: 'Documents',   icon: FileText },
-    { id: 'team',       label: 'Team',        icon: Users },
-  ];
+  const TABS = ['overview','financials','documents','team'];
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
-      <Navbar />
-
-      {/* Pulse bar */}
-      <div className="border-b border-zinc-800 bg-black px-6 py-2 flex items-center gap-5 text-[9px] font-mono uppercase tracking-widest overflow-x-auto">
-        <span className="flex items-center gap-1.5 text-teal-500 flex-shrink-0"><Wifi size={8} /> Live Project Data</span>
-        {project.gov_verified && <span className="flex items-center gap-1.5 text-emerald-400 flex-shrink-0"><ShieldCheck size={8} /> Government Verified</span>}
-        <span className="text-zinc-600 flex-shrink-0">{project.country} · {project.category}</span>
-      </div>
-
+      <Navbar/>
       <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
-          {/* ── LEFT: Main content ────────────────────────── */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Header */}
-            <div>
-              <div className="flex items-center gap-2 text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-3">
-                <Link href="/investments" className="hover:text-teal-500">Investments</Link>
-                <ChevronRight size={10} />
-                <span className="text-white">{project.title}</span>
-              </div>
-              <div className="flex items-start gap-3 flex-wrap">
-                <h1 className="text-3xl font-black tracking-tighter uppercase italic flex-1">{project.title}</h1>
-                {project.gov_verified && (
-                  <span className="flex items-center gap-1 text-[9px] bg-teal-500/10 border border-teal-500/30 text-teal-500 px-3 py-1 rounded-full font-bold uppercase">
-                    <ShieldCheck size={10} /> Verified
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-4 mt-2 text-zinc-500 text-sm">
-                <span className="flex items-center gap-1"><MapPin size={12} /> {project.location}, {project.country}</span>
-                {project.timeline_months && <span className="flex items-center gap-1"><Calendar size={12} /> {project.timeline_months} months</span>}
-              </div>
-            </div>
+        {/* back */}
+        <Link href="/investments" className="inline-flex items-center gap-2 text-[10px] text-zinc-500 hover:text-white uppercase font-bold tracking-widest mb-6 transition-colors">
+          <ArrowLeft size={12}/> Investment Nodes
+        </Link>
 
-            {/* Image gallery */}
-            <div className="space-y-3">
-              <div className="relative h-64 md:h-80 rounded-2xl overflow-hidden border border-zinc-800">
-                <Image
-                  src={project.hero_image_url ?? MOCK_IMAGES[activeImg]}
-                  alt={project.title}
-                  fill className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 800px"
-                />
-                <div className="absolute bottom-4 right-4 text-[9px] font-mono bg-black/60 px-2 py-1 rounded border border-zinc-700 text-zinc-400">
-                  Site Render · {project.location}
+        {/* ── hero ─────────────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-2 p-8 rounded-3xl border border-zinc-800 bg-zinc-900/30 space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-2xl flex-shrink-0">
+                {CAT_ICON[project.category] ?? '🏗️'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <h1 className="text-2xl font-black tracking-tight uppercase">{project.title}</h1>
+                  {project.gov_verified && (
+                    <span className="flex items-center gap-1 text-[8px] px-2 py-0.5 rounded border border-teal-500/40 bg-teal-500/10 text-teal-500 font-bold uppercase">
+                      <ShieldCheck size={9}/> GOV VERIFIED
+                    </span>
+                  )}
+                  <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${
+                    project.status === 'ACTIVE' ? 'border-emerald-500/40 text-emerald-400' : 'border-zinc-700 text-zinc-500'
+                  }`}>{project.status}</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-zinc-500 flex-wrap">
+                  <span className="flex items-center gap-1"><MapPin size={11}/> {project.location}, {project.country}</span>
+                  <span className="flex items-center gap-1"><Building2 size={11}/> {project.category}</span>
+                  {project.timeline_months && <span className="flex items-center gap-1"><Calendar size={11}/> {project.timeline_months}mo timeline</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {MOCK_IMAGES.map((img, i) => (
-                  <button key={i} onClick={() => setActiveImg(i)}
-                    className={`relative h-20 rounded-xl overflow-hidden border transition-all ${activeImg === i ? 'border-teal-500' : 'border-zinc-800 hover:border-zinc-600'}`}>
-                    <Image src={img} alt="" fill className="object-cover" sizes="200px" />
-                  </button>
-                ))}
-              </div>
             </div>
-
-            {/* Tab navigation */}
-            <div className="flex gap-1 border-b border-zinc-800">
-              {tabs.map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-all -mb-px ${
-                    activeTab === tab.id ? 'border-teal-500 text-teal-500' : 'border-transparent text-zinc-500 hover:text-white'
-                  }`}>
-                  <tab.icon size={12} /> {tab.label}
-                </button>
+            <p className="text-zinc-400 text-sm leading-relaxed">{project.description}</p>
+            <div className="flex items-center gap-3 flex-wrap pt-2">
+              {['12% est. annual return','Tri-layer verification','Escrow-secured','SHA-256 ledger'].map(b => (
+                <span key={b} className="flex items-center gap-1 text-[9px] text-teal-500 border border-teal-500/30 bg-teal-500/5 px-2 py-1 rounded-lg font-bold uppercase tracking-widest">
+                  <CheckCircle2 size={8}/> {b}
+                </span>
               ))}
             </div>
+          </div>
 
-            {/* Tab: Overview */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-3">Project Description</h3>
-                  <p className="text-zinc-300 text-sm leading-relaxed">{project.description}</p>
-                  {project.pitch_summary && (
-                    <p className="text-zinc-500 text-sm mt-3 leading-relaxed italic">{project.pitch_summary}</p>
-                  )}
+          {/* investment CTA card */}
+          <div className="p-6 rounded-3xl border border-zinc-700 bg-zinc-900/50 space-y-5 flex flex-col">
+            <div>
+              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-1">Project Budget</p>
+              <p className="text-3xl font-black font-mono text-white">{format(budget)}</p>
+              <p className="text-zinc-600 text-[9px] font-mono">₦{(budget * 1381).toLocaleString(undefined,{maximumFractionDigits:0})} NGN</p>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest">
+                <span className="text-zinc-500">Capital Secured</span>
+                <span className="text-teal-500">{fillPct}%</span>
+              </div>
+              <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all shadow-[0_0_8px_rgba(20,184,166,0.4)]" style={{width:`${fillPct}%`}}/>
+              </div>
+              <div className="flex justify-between text-[9px] text-zinc-600 font-mono">
+                <span>{format(raised)} raised</span>
+                <span>{investments.filter(i=>i.status==='COMMITTED').length} investors</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Risk Grade',    value: riskGrade,           color: 'text-emerald-400' },
+                { label: 'Annual Yield',  value: '12% est.',          color: 'text-teal-400' },
+                { label: 'Min. Invest',   value: '₦5,000',            color: 'text-white' },
+                { label: 'Tenure',        value: '24 months',         color: 'text-amber-400' },
+              ].map(s => (
+                <div key={s.label} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800">
+                  <p className="text-[8px] text-zinc-600 uppercase font-bold tracking-widest">{s.label}</p>
+                  <p className={`font-mono text-sm font-bold mt-0.5 ${s.color}`}>{s.value}</p>
                 </div>
-
-                {/* Milestone progress */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Milestone Progress ({milestonesPaid}/{milestones.length} completed)</h3>
-                  {milestones.map((m, i) => (
-                    <div key={m.id} className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 flex items-center gap-4">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                        m.status === 'PAID' ? 'bg-teal-500 text-black' : 'bg-zinc-800 text-zinc-500'
-                      }`}>{i + 1}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold uppercase tracking-tight">{m.title}</p>
-                        <p className="text-[9px] text-zinc-500 mt-0.5">
-                          ${Number(m.budget_allocation).toLocaleString()} · {m.status}
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1 flex-shrink-0">
-                        {[{ l: 'AI', s: m.ai_status }, { l: 'H', s: m.human_status }, { l: 'D', s: m.drone_status }].map(v => (
-                          <span key={v.l} className={`text-[7px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                            v.s === 'VERIFIED' ? 'bg-teal-500/20 text-teal-500' : 'bg-zinc-800 text-zinc-600'
-                          }`}>{v.l}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 3D / Floor plan previews */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Site Plans & Renders</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {MOCK_FLOOR_PLANS.map((img, i) => (
-                      <div key={i} className="relative h-40 rounded-xl overflow-hidden border border-zinc-800 group">
-                        <Image src={img} alt="Floor plan" fill className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="400px" />
-                        <div className="absolute inset-0 bg-black/40 flex items-end p-3">
-                          <span className="text-[9px] text-zinc-300 font-mono uppercase">{i === 0 ? 'Site Layout Plan' : '3D Infrastructure Render'}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              ))}
+            </div>
+            <Link href="/investments"
+              className="w-full py-4 bg-teal-500 text-black font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-teal-400 transition-all flex items-center justify-center gap-2 text-center mt-auto">
+              <CreditCard size={14}/> Fund This Project
+            </Link>
+            {project.gov_verified && (
+              <div className="flex items-center gap-2 text-[8px] text-zinc-600">
+                <ShieldCheck size={10} className="text-teal-500"/> Government verified · Ref: {project.verification_hash?.slice(0,16) ?? 'N/A'}…
               </div>
             )}
+          </div>
+        </div>
 
-            {/* Tab: Financials */}
-            {activeTab === 'financials' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {[
-                    { label: 'Total Budget', value: format(budget), color: 'text-white' },
-                    { label: 'Raised So Far', value: `${fundingPct.toFixed(1)}%`, color: 'text-teal-400' },
-                    { label: 'Expected ROI', value: `${roiPct}% p.a.`, color: 'text-emerald-400' },
-                    { label: 'Risk Grade', value: project.risk_grade ?? 'B+', color: 'text-amber-400' },
-                    { label: 'Milestones', value: `${milestones.length} phases`, color: 'text-white' },
-                    { label: 'Timeline', value: `${project.timeline_months ?? 24} months`, color: 'text-white' },
-                  ].map(item => (
-                    <div key={item.label} className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/20">
-                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{item.label}</p>
-                      <p className={`text-xl font-black font-mono mt-1 ${item.color}`}>{item.value}</p>
-                    </div>
-                  ))}
-                </div>
+        {/* ── tab nav ──────────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-1 border-b border-zinc-800 mb-6 overflow-x-auto">
+          {TABS.map(t => (
+            <button key={t} onClick={() => setTab(t as any)}
+              className={`px-5 py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${
+                tab === t ? 'border-teal-500 text-teal-500' : 'border-transparent text-zinc-500 hover:text-white'
+              }`}>{t}
+            </button>
+          ))}
+        </div>
 
-                {/* Escrow mechanics */}
-                <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-4">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Escrow Release Flow</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                      { step: '1', label: 'Investor Commits', desc: 'Capital locked in escrow via Paystack' },
-                      { step: '2', label: 'AI + Drone Verify', desc: 'Automated evidence validation' },
-                      { step: '3', label: 'Human Audit', desc: 'Government/ADMIN sign-off' },
-                      { step: '4', label: 'Funds Released', desc: 'Direct to contractor node' },
-                    ].map(s => (
-                      <div key={s.step} className="flex flex-col items-center text-center gap-2 p-3 rounded-xl border border-zinc-800">
-                        <div className="w-7 h-7 rounded-full bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-500 text-[10px] font-black">{s.step}</div>
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-white">{s.label}</p>
-                        <p className="text-[8px] text-zinc-500">{s.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Partner info */}
-                {(project.assigned_bank || project.primary_supplier) && (
-                  <div className="grid grid-cols-2 gap-4">
-                    {project.assigned_bank && (
-                      <div className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/20">
-                        <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-1">Assigned Bank</p>
-                        <p className="text-sm font-bold text-white">{project.assigned_bank}</p>
-                        <p className="text-[9px] text-teal-500 mt-1 uppercase">{project.bank_status ?? 'PENDING'}</p>
-                      </div>
-                    )}
-                    {project.primary_supplier && (
-                      <div className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/20">
-                        <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-1">Primary Supplier</p>
-                        <p className="text-sm font-bold text-white">{project.primary_supplier}</p>
-                        <p className="text-[9px] text-amber-400 mt-1 uppercase">{project.supply_status ?? 'PENDING'}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab: Documents */}
-            {activeTab === 'documents' && (
-              <div className="space-y-3">
-                <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-400 uppercase font-bold tracking-widest flex items-center gap-2">
-                  <Lock size={10} /> Some documents require KYC verification to access
-                </div>
-                {documents.map(doc => {
-                  const locked = doc.requires_kyc && !isKycVerified;
-                  return (
-                    <div key={doc.id} className={`p-5 rounded-xl border transition-all ${locked ? 'border-zinc-800 bg-zinc-900/10 opacity-60' : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700'}`}>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[9px] text-teal-500 font-bold uppercase">{docTypeLabel[doc.doc_type] ?? doc.doc_type}</span>
-                            {doc.is_public && <span className="text-[8px] border border-zinc-700 text-zinc-500 px-1.5 py-0.5 rounded uppercase">Public</span>}
-                            {doc.requires_kyc && <span className="text-[8px] border border-amber-500/30 text-amber-400 px-1.5 py-0.5 rounded uppercase flex items-center gap-1"><Lock size={7} /> KYC Required</span>}
-                          </div>
-                          <p className="text-sm font-bold text-white">{doc.title}</p>
-                          <p className="text-[10px] text-zinc-500 mt-1">{doc.description}</p>
-                        </div>
-                        {!locked ? (
-                          <button className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-white transition-all flex-shrink-0">
-                            <Download size={10} /> Download
-                          </button>
-                        ) : (
-                          <Link href="/kyc" className="flex items-center gap-1 px-3 py-2 border border-amber-500/30 text-amber-400 font-bold rounded-lg text-[9px] uppercase hover:bg-amber-500/10 transition-all flex-shrink-0">
-                            <Lock size={10} /> Verify KYC
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Tab: Team */}
-            {activeTab === 'team' && (
-              <div className="space-y-4">
-                {[
-                  { role: 'Government Sponsor', name: 'Federal Ministry of Works', desc: 'Project mandate and regulatory oversight authority', badge: 'VERIFIED', color: 'teal' },
-                  { role: 'Lead Contractor', name: project.vendor ?? 'Julius Berger Nigeria PLC', desc: 'Primary infrastructure contractor — 40+ years of civil engineering excellence', badge: 'LICENSED', color: 'white' },
-                  { role: 'Funding Bank', name: project.funding_bank ?? project.assigned_bank ?? 'Access Bank (Corporate Lending)', desc: 'Institutional capital provider — project tranche management and disbursement', badge: 'INSTITUTIONAL', color: 'white' },
-                  { role: 'Materials Supplier', name: project.primary_supplier ?? 'Dangote Cement PLC', desc: 'Authorized supply chain partner — bulk materials, delivery tracking, and quality certification', badge: 'PARTNER', color: 'white' },
-                ].map(member => (
-                  <div key={member.role} className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/20 flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                      <Building2 size={16} className="text-teal-500" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{member.role}</p>
-                        <span className={`text-[8px] border px-1.5 py-0.5 rounded font-bold uppercase ${
-                          member.color === 'teal' ? 'border-teal-500/40 text-teal-500' : 'border-zinc-700 text-zinc-400'
-                        }`}>{member.badge}</span>
-                      </div>
-                      <p className="text-sm font-bold text-white">{member.name}</p>
-                      <p className="text-[10px] text-zinc-500 mt-1">{member.desc}</p>
+        {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
+        {tab === 'overview' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* gallery */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Site Visuals & Renders</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {MOCK_GALLERY.filter(g => g.type === 'render').map((g, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden border border-zinc-800 relative group aspect-video">
+                    <img src={g.src} alt={g.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                    <div className="absolute inset-0 bg-black/50 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-[9px] text-white font-bold uppercase tracking-widest">{g.label}</p>
                     </div>
                   </div>
                 ))}
-
-                <div className="p-5 rounded-xl border border-teal-500/20 bg-teal-500/5 space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-teal-500">Platform Guarantees</h4>
-                  {[
-                    'Funds held in Paystack-secured escrow until milestone verification',
-                    'AI + Human + Drone tri-layer evidence validation before any release',
-                    'All transactions logged in immutable SHA-256 hash chain ledger',
-                    'Government authorization required for every milestone payout',
-                  ].map((g, i) => (
-                    <div key={i} className="flex items-start gap-2 text-[10px] text-zinc-400">
-                      <CheckCircle2 size={10} className="text-teal-500 mt-0.5 flex-shrink-0" />
-                      {g}
-                    </div>
-                  ))}
-                </div>
               </div>
-            )}
+              <p className="text-[9px] text-zinc-600">3D architectural renders · Site master plans · Engineering schematics available in Documents tab.</p>
+            </div>
+
+            {/* milestones */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Project Milestones</h3>
+              {milestones.length === 0 && <p className="text-zinc-600 text-xs">No milestones published yet.</p>}
+              {milestones.map(m => {
+                const allOk = m.ai_status==='VERIFIED' && m.human_status==='VERIFIED' && m.drone_status==='VERIFIED';
+                const isOpen = expandedMs === m.id;
+                return (
+                  <div key={m.id} className={`rounded-xl border transition-all ${allOk ? 'border-teal-500/30 bg-teal-500/5' : m.status === 'PAID' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-zinc-800 bg-zinc-900/20'}`}>
+                    <button onClick={() => setExpandedMs(isOpen ? null : m.id)} className="w-full flex items-center justify-between p-4 text-left">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[9px] font-black flex-shrink-0 ${
+                          m.status === 'PAID' ? 'bg-emerald-500/20 text-emerald-400' :
+                          allOk ? 'bg-teal-500/20 text-teal-500' : 'bg-zinc-800 text-zinc-500'
+                        }`}>
+                          {m.status === 'PAID' ? <CheckCircle2 size={13}/> : allOk ? <ShieldCheck size={13}/> : <Clock size={13}/>}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-tight">{m.title}</p>
+                          <p className="text-[9px] text-zinc-500 font-mono">${Number(m.budget_allocation).toLocaleString()}</p>
+                        </div>
+                      </div>
+                      {isOpen ? <ChevronUp size={14} className="text-zinc-500"/> : <ChevronDown size={14} className="text-zinc-500"/>}
+                    </button>
+                    {isOpen && (
+                      <div className="px-4 pb-4 space-y-2 border-t border-zinc-800/50">
+                        <p className="text-zinc-500 text-xs mt-3 leading-relaxed">{m.description}</p>
+                        <div className="flex gap-3 mt-2">
+                          {[
+                            { label: 'AI', status: m.ai_status },
+                            { label: 'Human', status: m.human_status },
+                            { label: 'Drone', status: m.drone_status },
+                          ].map(v => (
+                            <div key={v.label} className={`flex items-center gap-1 text-[8px] font-bold uppercase px-2 py-1 rounded-lg border ${
+                              v.status === 'VERIFIED' ? 'border-teal-500/40 text-teal-500 bg-teal-500/10' : 'border-zinc-700 text-zinc-500'
+                            }`}>
+                              <ShieldCheck size={8}/> {v.label}: {v.status}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3">
+                          <div className="flex justify-between text-[8px] text-zinc-600 mb-1">
+                            <span>Progress</span><span>{m.progress_percentage ?? 0}%</span>
+                          </div>
+                          <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-teal-500" style={{width:`${m.progress_percentage ?? 0}%`}}/>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        )}
 
-          {/* ── RIGHT: CTA sidebar ────────────────────────── */}
-          <div className="space-y-6">
-            {/* Funding progress card */}
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5 sticky top-24">
-              <div>
-                <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest mb-2">
-                  <span className="text-zinc-400">Funding Progress</span>
-                  <span className="text-teal-500">{fundingPct.toFixed(1)}%</span>
+        {/* ── FINANCIALS ───────────────────────────────────────────────────── */}
+        {tab === 'financials' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Financial Breakdown</h3>
+              {[
+                { label: 'Total Project Budget',   value: format(budget), sub: `₦${(budget*1381).toLocaleString(undefined,{maximumFractionDigits:0})}`, hi: true },
+                { label: 'Capital Raised to Date', value: format(raised), sub: `${fillPct}% funded` },
+                { label: 'Remaining to Raise',     value: format(budget - raised), sub: 'Open for investment' },
+                { label: 'Estimated Annual Return',value: '12% p.a.',      sub: 'Over 24-month tenure' },
+                { label: 'Milestone Payouts',       value: milestones.length + ' tranches', sub: 'Released on verification' },
+              ].map(r => (
+                <div key={r.label} className="flex justify-between items-start py-3 border-b border-zinc-800/50">
+                  <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{r.label}</span>
+                  <div className="text-right">
+                    <p className={`font-mono text-sm font-bold ${r.hi ? 'text-teal-500' : 'text-white'}`}>{r.value}</p>
+                    <p className="text-[8px] text-zinc-600">{r.sub}</p>
+                  </div>
                 </div>
-                <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-teal-500 transition-all duration-700" style={{ width: `${fundingPct}%` }} />
-                </div>
-                <div className="flex justify-between mt-1 text-[9px] text-zinc-600">
-                  <span>{format(totalInvested)} raised</span>
-                  <span>{format(budget)} target</span>
-                </div>
+              ))}
+            </div>
+            <div className="space-y-4">
+              <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Escrow Mechanics</h3>
+                {[
+                  { n:'1', t:'Investor Funds via Paystack', d:'Capital enters Nested Ark escrow. Fully segregated, never co-mingled.' },
+                  { n:'2', t:'Milestone Gates', d:'Funds released per milestone. Each gate requires AI + Human + Drone sign-off.' },
+                  { n:'3', t:'Tri-Layer Verification', d:'AI risk model, Government human audit, and drone site footage all confirm progress.' },
+                  { n:'4', t:'SHA-256 Release Hash', d:'Each release creates an immutable cryptographic record on the ledger.' },
+                ].map(s => (
+                  <div key={s.n} className="flex gap-3">
+                    <div className="h-5 w-5 rounded-full bg-teal-500/20 border border-teal-500/30 text-teal-400 text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{s.n}</div>
+                    <div>
+                      <p className="text-[10px] font-bold text-white uppercase tracking-widest">{s.t}</p>
+                      <p className="text-[9px] text-zinc-500 mt-0.5 leading-relaxed">{s.d}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800">
-                  <p className="text-[8px] text-zinc-500 uppercase font-bold">ROI</p>
-                  <p className="text-teal-400 font-black text-base">{roiPct}%</p>
-                </div>
-                <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800">
-                  <p className="text-[8px] text-zinc-500 uppercase font-bold">Tenure</p>
-                  <p className="text-white font-black text-base">{project.timeline_months ?? 24}mo</p>
-                </div>
-              </div>
-
-              {user?.role === 'INVESTOR' && (
-                <Link href="/investments"
-                  className="flex items-center justify-center gap-2 w-full py-4 bg-white text-black font-black uppercase text-xs tracking-[0.15em] rounded-xl hover:bg-teal-500 transition-all">
-                  <DollarSign size={14} /> Fund This Project
-                </Link>
-              )}
-
-              <div className="space-y-2 text-[9px] text-zinc-500">
-                {project.gov_verified && (
-                  <div className="flex items-center gap-2 text-teal-500"><ShieldCheck size={10} /> Government Verified</div>
-                )}
-                <div className="flex items-center gap-2"><Globe size={10} /> {project.country}</div>
-                <div className="flex items-center gap-2"><Calendar size={10} /> Created {new Date(project.created_at).toLocaleDateString()}</div>
+              <div className="p-5 rounded-2xl border border-teal-500/20 bg-teal-500/5 flex items-start gap-3">
+                <ShieldCheck size={15} className="text-teal-500 flex-shrink-0 mt-0.5"/>
+                <p className="text-zinc-400 text-xs leading-relaxed">
+                  All payments processed by <strong className="text-white">Impressions & Impacts Ltd</strong> via Paystack. Your bank statement will show "Impressions and Impacts Ltd".
+                </p>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ── DOCUMENTS ────────────────────────────────────────────────────── */}
+        {tab === 'documents' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {MOCK_GALLERY.filter(g => g.type === 'doc').concat([
+                { type:'doc', label:'Site Survey & Geotechnical Report', ext:'PDF' },
+                { type:'doc', label:'Contractor Qualification Pack',     ext:'PDF' },
+              ]).map((doc, i) => (
+                <div key={i} className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 flex items-center gap-4 hover:border-zinc-700 transition-all">
+                  <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <FileText size={18} className="text-teal-500"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold truncate">{doc.label}</p>
+                    <p className="text-[8px] text-zinc-500 uppercase font-mono mt-0.5">{(doc as any).ext} · Government Issued</p>
+                  </div>
+                  <button className="text-[8px] text-teal-500 border border-teal-500/30 px-2 py-1 rounded-lg font-bold uppercase hover:bg-teal-500/10 transition-all">View</button>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 flex items-start gap-3">
+              <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5"/>
+              <p className="text-zinc-500 text-xs leading-relaxed">Full document access granted to KYC-verified investors. <Link href="/kyc" className="text-teal-500 hover:underline">Complete KYC →</Link></p>
+            </div>
+          </div>
+        )}
+
+        {/* ── TEAM ─────────────────────────────────────────────────────────── */}
+        {tab === 'team' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Project Principals</h3>
+              {[
+                { role: 'Government Sponsor', name: project.location + ' State Ministry of Works', badge: 'GOV', color: 'text-teal-500' },
+                { role: 'Lead Contractor', name: project.primary_supplier ?? 'Assigned upon bid award', badge: 'CONTR', color: 'text-amber-400' },
+                { role: 'Funding Bank', name: project.funding_bank ?? 'Open for bank tender', badge: 'BANK', color: 'text-purple-400' },
+                { role: 'Materials Supplier', name: project.vendor ?? 'Dangote Industries / Pending RFQ', badge: 'SUPP', color: 'text-blue-400' },
+              ].map(p => (
+                <div key={p.role} className="flex items-center gap-4 p-4 rounded-xl border border-zinc-800 bg-zinc-900/20">
+                  <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <Users size={16} className="text-zinc-500"/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{p.role}</p>
+                    <p className="text-sm font-bold truncate">{p.name}</p>
+                  </div>
+                  <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${p.color} border-current`}>{p.badge}</span>
+                </div>
+              ))}
+            </div>
+            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Platform Guarantees</h3>
+              {[
+                { icon: ShieldCheck, t: 'Tri-Layer Verification',   d: 'Every milestone verified by AI + Government auditor + Drone footage before escrow release.' },
+                { icon: Hash,        t: 'Immutable Ledger',          d: 'SHA-256 hash chain records every transaction. Tamper-proof and publicly auditable.' },
+                { icon: Globe,       t: 'Government Authorization',  d: 'Projects require signed approval from the relevant government ministry before going live.' },
+                { icon: Award,       t: 'AML/KYC Compliance',        d: 'All investors undergo identity verification. Fully compliant with Nigerian financial regulations.' },
+              ].map(g => {
+                const Icon = g.icon;
+                return (
+                  <div key={g.t} className="flex items-start gap-3">
+                    <Icon size={15} className="text-teal-500 flex-shrink-0 mt-0.5"/>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest">{g.t}</p>
+                      <p className="text-[9px] text-zinc-500 mt-0.5 leading-relaxed">{g.d}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </main>
-      <Footer />
+      <Footer/>
     </div>
   );
 }
