@@ -1,160 +1,188 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth, getRoleRoute, UserRole } from '@/lib/AuthContext';
-import {
-  Mail, Lock, Loader2, AlertCircle, ChevronRight,
-  TrendingUp, HardHat, ShieldCheck, Crown, Truck, Landmark
-} from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth, getRoleRoute, UserRole } from '@/lib/AuthContext';
+import api from '@/lib/api';
+import { Loader2, Eye, EyeOff, ShieldCheck, RefreshCw, Mail } from 'lucide-react';
 
 const PORTALS = [
-  { role: 'INVESTOR',    icon: TrendingUp, label: 'Investor',    desc: 'Fund projects, track ROI & escrow',       lands: '/investments',   color: 'text-emerald-400', border: 'border-emerald-500/40', bg: 'bg-emerald-500/5'  },
-  { role: 'CONTRACTOR',  icon: HardHat,    label: 'Contractor',  desc: 'Submit bids & verify milestones',         lands: '/projects',      color: 'text-amber-400',   border: 'border-amber-500/40',   bg: 'bg-amber-500/5'    },
-  { role: 'SUPPLIER',    icon: Truck,      label: 'Supplier',    desc: 'Manage material orders & deliveries',     lands: '/projects',      color: 'text-blue-400',    border: 'border-blue-500/40',    bg: 'bg-blue-500/5'     },
-  { role: 'BANK',        icon: Landmark,   label: 'Bank',        desc: 'Capital tranche & ledger verification',  lands: '/ledger',        color: 'text-purple-400',  border: 'border-purple-500/40',  bg: 'bg-purple-500/5'   },
-  { role: 'GOVERNMENT',  icon: ShieldCheck,label: 'Government',  desc: 'Authorize fund releases & audits',        lands: '/admin/approval',color: 'text-teal-400',    border: 'border-teal-500/40',    bg: 'bg-teal-500/5'     },
-  { role: 'ADMIN',       icon: Crown,      label: 'Admin',       desc: 'Full system command center',              lands: '/admin',         color: 'text-red-400',     border: 'border-red-500/40',     bg: 'bg-red-500/5'      },
+  { role: 'INVESTOR',    label: 'Investor',    desc: 'Fund infrastructure projects, track ROI and escrow', dest: '/portfolio', icon: '💰' },
+  { role: 'CONTRACTOR',  label: 'Contractor',  desc: 'Browse projects, submit bids, verify milestones',   dest: '/projects',   icon: '🏗' },
+  { role: 'SUPPLIER',    label: 'Supplier',    desc: 'Manage material orders, dispatch and delivery',       dest: '/supplier',   icon: '🚚' },
+  { role: 'BANK',        label: 'Bank',        desc: 'Capital stack overview, milestone payout approvals',  dest: '/bank',       icon: '🏦' },
+  { role: 'GOVERNMENT',  label: 'Government',  desc: 'Approve milestones, authorize fund releases',        dest: '/gov',        icon: '🏛' },
+  { role: 'ADMIN',       label: 'Admin',       desc: 'Full command center — role assigned by super admin', dest: '/admin',      icon: '⚙️',  restricted: true },
 ];
 
 export default function LoginPage() {
-  const { login, user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const { login, isAuthenticated, isLoading: authLoading, user } = useAuth();
 
-  // ── CRITICAL FIX: redirect using getRoleRoute, NOT hardcoded /dashboard ──
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [otpCode,     setOtpCode]     = useState('');
+  const [showPw,      setShowPw]      = useState(false);
+  const [step,        setStep]        = useState<'creds' | '2fa'>('creds');
+  const [busy,        setBusy]        = useState(false);
+  const [resending,   setResending]   = useState(false);
+  const [error,       setError]       = useState('');
+  const [notice,      setNotice]      = useState('');
+
+  // Redirect already-logged-in users
   useEffect(() => {
     if (!authLoading && isAuthenticated && user) {
       router.replace(getRoleRoute(user.role as UserRole));
     }
   }, [isAuthenticated, authLoading, user, router]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsSubmitting(true);
-    try {
-      const route = await login(email, password);
-      router.replace(route);
-    } catch {
-      setError('Invalid credentials. Check email and access key.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (authLoading) return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-      <Loader2 className="animate-spin text-teal-500" size={28} />
+    <div className="h-screen bg-[#050505] flex items-center justify-center">
+      <Loader2 className="animate-spin text-teal-500" size={32} />
     </div>
   );
-  if (isAuthenticated) return null;
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setError(''); setNotice('');
+    try {
+      // Pass otp_code only when in 2FA step
+      const payload = step === '2fa'
+        ? { email, password, otp_code: otpCode.trim() }
+        : { email, password };
+
+      const res = await api.post('/api/auth/login', payload);
+
+      if (res.data.requires_2fa) {
+        // Backend sent the OTP — show the code input
+        setStep('2fa');
+        setNotice(`A 6-digit code was sent to ${email}. Enter it below.`);
+        setBusy(false); return;
+      }
+
+      // Success — let AuthContext handle the token and route
+      const route = await login(email, password);
+      router.replace(route);
+    } catch (ex: any) {
+      setError(ex?.response?.data?.error ?? 'Sign-in failed. Check your credentials.');
+    } finally { setBusy(false); }
+  };
+
+  const resendOtp = async () => {
+    setResending(true); setError('');
+    try {
+      await api.post('/api/auth/send-otp', { email });
+      setNotice('New code sent to your email.');
+    } catch { setNotice('Could not resend. Try again in a moment.'); }
+    finally { setResending(false); }
+  };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-[560px] space-y-7">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-[440px] space-y-8">
 
-        {/* Header */}
-        <div className="text-center space-y-3">
-          <Image src="/nested_ark_icon.png" alt="Nested Ark Logo" width={56} height={56} priority className="mx-auto" style={{ width: '56px', height: 'auto' }} />
-          <h1 className="text-2xl font-bold text-white tracking-widest uppercase">System Login</h1>
-          <p className="text-zinc-500 text-xs uppercase tracking-[0.15em]">One door — your role routes you to the right command center</p>
+        {/* Logo */}
+        <div className="text-center space-y-2">
+          <Image src="/nested_ark_icon.png" alt="Nested Ark" width={48} height={48} priority
+            className="mx-auto" style={{ width: '48px', height: 'auto' }} />
+          <h1 className="text-sm font-black uppercase tracking-[0.2em]">Nested Ark <span className="text-teal-500">OS</span></h1>
+          <p className="text-[9px] text-zinc-600 uppercase tracking-widest">One door. Your role routes you to the right command center.</p>
         </div>
 
-        {/* 6-role grid — click to highlight, shows destination */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {PORTALS.map(p => {
-            const Icon = p.icon;
-            const isHl = highlighted === p.role;
-            return (
-              <button
-                key={p.role}
-                type="button"
-                onClick={() => setHighlighted(isHl ? null : p.role)}
-                className={`flex items-start gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  isHl
-                    ? `${p.border} ${p.bg} ring-1 ring-current`
-                    : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 hover:bg-zinc-900/40'
-                }`}
-              >
-                <Icon size={14} className={`${p.color} flex-shrink-0 mt-0.5`} />
-                <div className="min-w-0">
-                  <p className={`text-[9px] font-bold uppercase tracking-widest ${p.color}`}>{p.label}</p>
-                  {isHl ? (
-                    <>
-                      <p className="text-[8px] text-zinc-400 mt-0.5 leading-tight">{p.desc}</p>
-                      <p className={`text-[8px] mt-1 font-mono ${p.color} opacity-70`}>→ {p.lands}</p>
-                    </>
-                  ) : (
-                    <p className="text-[8px] text-zinc-600 mt-0.5 leading-tight truncate">{p.desc}</p>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+        {/* Role portal cards */}
+        <div className="grid grid-cols-3 gap-2">
+          {PORTALS.map(p => (
+            <div key={p.role}
+              className={`p-3 rounded-xl border text-center space-y-1 ${p.restricted ? 'border-zinc-800 bg-zinc-900/20 opacity-60' : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700'} transition-all`}>
+              <p className="text-lg">{p.icon}</p>
+              <p className="text-[9px] font-black uppercase tracking-widest text-white">{p.label}</p>
+              <p className="text-[8px] text-zinc-600 leading-tight">{p.desc}</p>
+              {!p.restricted && (
+                <p className="text-[7px] text-teal-500 font-mono uppercase">→ {p.dest}</p>
+              )}
+              {p.restricted && (
+                <p className="text-[7px] text-zinc-600 italic">System-assigned only</p>
+              )}
+            </div>
+          ))}
         </div>
 
-        <p className="text-[9px] text-zinc-700 text-center uppercase tracking-widest -mt-2">
-          Admin role is assigned by the system owner — not self-registered
-        </p>
+        {/* Login form */}
+        <div className="space-y-1">
+          <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest text-center">
+            {step === 'creds' ? 'Establish Connection' : '2-Factor Verification'}
+          </p>
+        </div>
 
-        {/* Credentials form */}
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-4">
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 pointer-events-none" />
-              <input
-                type="email"
-                placeholder="Operator Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full bg-black border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-600 pointer-events-none" />
-              <input
-                type="password"
-                placeholder="Access Key"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="w-full bg-black border border-zinc-800 rounded-xl pl-12 pr-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-              />
-            </div>
+        {notice && (
+          <div className="flex items-start gap-2 p-4 rounded-xl bg-teal-500/5 border border-teal-500/20 text-teal-400 text-xs">
+            <Mail size={14} className="flex-shrink-0 mt-0.5" /> {notice}
           </div>
+        )}
+        {error && (
+          <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-red-400 text-xs font-bold">
+            {error}
+          </div>
+        )}
 
-          {error && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-center gap-2 text-red-400 text-[10px] uppercase font-bold tracking-widest">
-                <AlertCircle size={12} /> {error}
+        <form onSubmit={handleLogin} className="space-y-4">
+          {step === 'creds' ? (
+            <>
+              <div className="relative">
+                <input required type="email" placeholder="Operator email address" value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 text-white text-sm outline-none focus:border-teal-500 transition-colors" />
               </div>
-              <Link href="/forgot-password" className="block text-center text-zinc-500 hover:text-white text-[9px] uppercase tracking-tighter border border-zinc-800/50 py-2 rounded-lg transition-colors">
-                Forgot Access Key? Initiate Recovery Protocol
-              </Link>
+              <div className="relative">
+                <input required type={showPw ? 'text' : 'password'} placeholder="Access key (password)"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 pr-12 text-white text-sm outline-none focus:border-teal-500 transition-colors" />
+                <button type="button" onClick={() => setShowPw(v => !v)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative">
+                <input required type="text" inputMode="numeric" maxLength={6}
+                  placeholder="Enter 6-digit code" value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-5 text-white text-2xl font-mono text-center tracking-[0.4em] outline-none focus:border-teal-500 transition-colors" />
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={resendOtp} disabled={resending}
+                  className="flex items-center gap-2 text-[10px] text-zinc-500 hover:text-teal-500 font-bold uppercase transition-colors">
+                  <RefreshCw size={11} className={resending ? 'animate-spin' : ''} /> Resend code
+                </button>
+                <button type="button" onClick={() => { setStep('creds'); setOtpCode(''); setError(''); setNotice(''); }}
+                  className="text-[10px] text-zinc-500 hover:text-white font-bold uppercase transition-colors ml-auto">
+                  ← Back
+                </button>
+              </div>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-teal-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <><ChevronRight size={14} /> Establish Connection</>}
+          <button type="submit" disabled={busy}
+            className="w-full py-4 bg-white text-black font-black uppercase tracking-[0.15em] text-xs rounded-xl hover:bg-teal-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy
+              ? <><Loader2 className="animate-spin" size={14} /> Verifying…</>
+              : step === '2fa' ? <><ShieldCheck size={14} /> Confirm Identity</> : 'Establish Connection'
+            }
           </button>
         </form>
 
-        <p className="text-center text-zinc-500 text-xs uppercase tracking-widest">
-          New Operator? <Link href="/register" className="text-teal-500 hover:underline">Apply for Access</Link>
-        </p>
+        <div className="flex justify-between text-[9px] text-zinc-600 uppercase font-bold tracking-widest pt-1">
+          <Link href="/register" className="hover:text-teal-500 transition-colors">New Operator? Apply for Access</Link>
+          <Link href="/forgot-password" className="hover:text-teal-500 transition-colors">Recover Access</Link>
+        </div>
+
+        <div className="text-center text-[8px] text-zinc-700 pt-4 border-t border-zinc-900">
+          <ShieldCheck size={10} className="inline text-teal-500/40 mr-1" />
+          A product of Impressions &amp; Impacts Ltd · nestedark@gmail.com
+        </div>
       </div>
     </div>
   );

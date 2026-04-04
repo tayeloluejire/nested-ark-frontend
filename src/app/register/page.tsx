@@ -1,157 +1,215 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import api from '@/lib/api';
 import { useAuth, getRoleRoute, UserRole } from '@/lib/AuthContext';
-import { Eye, EyeOff, Loader2, ArrowLeft, Shield, Landmark, HardHat, LogIn, TrendingUp, Truck } from 'lucide-react';
+import { Loader2, Eye, EyeOff, CheckCircle2, Mail, ShieldCheck } from 'lucide-react';
 
 const ROLES = [
-  { id: 'INVESTOR',   label: 'Investor',   icon: TrendingUp, desc: 'Fund infrastructure projects' },
-  { id: 'CONTRACTOR', label: 'Contractor', icon: HardHat,    desc: 'Execute & bid on projects'   },
-  { id: 'SUPPLIER',   label: 'Supplier',   icon: Truck,      desc: 'Material & logistics partner' },
-  { id: 'BANK',       label: 'Bank',       icon: Landmark,   desc: 'Capital tranche provider'     },
-  { id: 'GOVERNMENT', label: 'Govt',       icon: Shield,     desc: 'Government sponsor'           },
+  { value: 'INVESTOR',   label: '💰 Investor',    desc: 'Fund projects & earn infrastructure yield' },
+  { value: 'CONTRACTOR', label: '🏗 Contractor',   desc: 'Bid on works, execute projects, get paid' },
+  { value: 'SUPPLIER',   label: '🚚 Supplier',     desc: 'Supply materials, confirm deliveries' },
+  { value: 'BANK',       label: '🏦 Bank',         desc: 'Institutional capital & risk management' },
+  { value: 'GOVERNMENT', label: '🏛 Government',   desc: 'Sponsor & verify infrastructure projects' },
 ];
 
+type Phase = 'form' | 'verify_sent';
+
 export default function RegisterPage() {
-  const { register, user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('INVESTOR');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { register } = useAuth();
 
-  // Redirect authenticated users to their correct portal
-  useEffect(() => {
-    if (!authLoading && isAuthenticated && user) {
-      router.replace(getRoleRoute(user.role as UserRole));
-    }
-  }, [isAuthenticated, authLoading, user, router]);
+  const [form, setForm]     = useState({ full_name: '', email: '', password: '', role: 'INVESTOR' });
+  const [showPw, setShowPw] = useState(false);
+  const [busy,   setBusy]   = useState(false);
+  const [error,  setError]  = useState('');
+  const [phase,  setPhase]  = useState<Phase>('form');
+  const [sentTo, setSentTo] = useState('');
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!name.trim()) { setError('Full name is required.'); return; }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    setIsSubmitting(true);
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    setBusy(true);
     try {
-      const route = await register(email.trim(), password, name.trim(), role);
-      router.replace(route);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err?.response?.data?.error || 'Account initialization failed. Try again.');
-    } finally { setIsSubmitting(false); }
+      // Register returns a limited token + requires_verification flag
+      await register(form.email, form.password, form.full_name, form.role);
+      setSentTo(form.email);
+      setPhase('verify_sent');
+    } catch (ex: any) {
+      setError(ex?.response?.data?.error ?? 'Registration failed. Please try again.');
+    } finally { setBusy(false); }
   };
 
-  if (authLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={28} /></div>;
-  if (isAuthenticated) return null;
+  // ── Phase: Email sent ─────────────────────────────────────────────────────
+  if (phase === 'verify_sent') return (
+    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
+      <div className="w-full max-w-[420px] text-center space-y-6">
+        <Image src="/nested_ark_icon.png" alt="Nested Ark" width={48} height={48} priority
+          className="mx-auto" style={{ width: '48px', height: 'auto' }} />
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-6">
-      <div className="w-full max-w-[520px]">
-        <div className="flex items-center mb-8">
-          <Link href="/login" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-white group">
-            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> Back to Login
-          </Link>
+        <div className="relative mx-auto w-20 h-20">
+          <div className="absolute inset-0 rounded-full bg-teal-500/10 animate-ping" />
+          <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-teal-500/20 border-2 border-teal-500/30">
+            <Mail className="text-teal-500" size={32} />
+          </div>
         </div>
 
-        <div className="mb-8 space-y-2">
-          <Image src="/nested_ark_icon.png" alt="Logo" width={48} height={48} priority style={{ width: '48px', height: 'auto' }} />
-          <h1 className="text-3xl font-bold tracking-tight text-white">Initialize Account</h1>
-          <p className="text-zinc-400 text-sm">Select your operator role to engage the infrastructure.</p>
+        <div>
+          <h2 className="text-2xl font-black uppercase tracking-tighter">Check Your Email</h2>
+          <p className="text-teal-500 text-sm mt-1">Account created — verification required</p>
         </div>
 
-        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 backdrop-blur-xl shadow-2xl">
-          <form onSubmit={handleRegister} className="space-y-6">
-            {/* Role selector */}
-            <div>
-              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Select Role</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {ROLES.map(r => {
-                  const Icon = r.icon;
-                  const isActive = role === r.id;
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setRole(r.id)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all ${
-                        isActive ? 'border-teal-500 bg-teal-500/10 text-white' : 'border-zinc-800 bg-black text-zinc-500 hover:border-zinc-700'
-                      }`}
-                    >
-                      <Icon size={18} className={isActive ? 'text-teal-500' : 'text-zinc-600'} />
-                      <span className="mt-1.5 text-[9px] font-bold uppercase tracking-tight">{r.label}</span>
-                      <span className="text-[8px] text-zinc-600 mt-0.5 text-center leading-tight">{r.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        <p className="text-zinc-400 text-sm leading-relaxed">
+          We sent a verification link to <strong className="text-white">{sentTo}</strong>. Click the link to activate your account before you can invest.
+        </p>
+
+        <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 space-y-2 text-left text-[10px] text-zinc-400">
+          {[
+            'Check your inbox (and spam folder)',
+            'Click the Verify My Account button in the email',
+            'The link expires in 24 hours',
+            'Sign in once verified to access your portal',
+          ].map((s, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <CheckCircle2 size={10} className="text-teal-500 mt-0.5 flex-shrink-0" />
+              {s}
             </div>
-
-            {/* Fields */}
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Authorized Full Name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                required
-                autoComplete="name"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-              />
-              <input
-                type="email"
-                placeholder="Verification Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-              />
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Access Password (min. 6 chars)"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-500 transition-colors"
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {error && (
-              <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-center space-y-3">
-                <p className="text-red-400 text-[10px] uppercase font-bold tracking-widest">{error}</p>
-                {(error.toLowerCase().includes('registered') || error.toLowerCase().includes('exists')) && (
-                  <Link href="/login" className="flex items-center justify-center gap-2 text-white bg-red-500/20 py-2 rounded-lg text-[10px] font-bold uppercase hover:bg-red-500/30 transition-all">
-                    <LogIn size={12} /> Login to existing account
-                  </Link>
-                )}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-4 rounded-xl bg-teal-500 text-black font-bold uppercase text-xs tracking-[0.2em] hover:bg-teal-400 transition-all disabled:opacity-50 flex items-center justify-center"
-            >
-              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : 'Activate Connection'}
-            </button>
-          </form>
+          ))}
         </div>
 
-        <p className="text-center text-zinc-500 text-xs uppercase tracking-widest mt-6">
-          Already registered? <Link href="/login" className="text-teal-500 hover:underline">Sign In</Link>
+        <ResendBlock email={sentTo} />
+
+        <Link href="/login"
+          className="block w-full py-4 bg-white text-black font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-teal-500 transition-all">
+          Back to Sign In
+        </Link>
+
+        <p className="text-[8px] text-zinc-700 font-mono">
+          <ShieldCheck size={9} className="inline text-teal-500/40 mr-1" />
+          Impressions &amp; Impacts Ltd · nestedark@gmail.com
         </p>
       </div>
+    </div>
+  );
+
+  // ── Phase: Registration form ───────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
+      <div className="w-full max-w-[440px] space-y-8">
+
+        {/* Logo */}
+        <div className="text-center">
+          <Image src="/nested_ark_icon.png" alt="Nested Ark" width={48} height={48} priority
+            className="mx-auto mb-3" style={{ width: '48px', height: 'auto' }} />
+          <h1 className="text-sm font-black uppercase tracking-[0.2em]">Nested Ark <span className="text-teal-500">OS</span></h1>
+          <p className="text-[9px] text-zinc-600 uppercase tracking-widest mt-1">Initialize Account</p>
+        </div>
+
+        {error && (
+          <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-red-400 text-xs font-bold">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Role selector */}
+          <div className="space-y-2">
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.2em]">Select your operator role</p>
+            <div className="grid grid-cols-1 gap-2">
+              {ROLES.map(r => (
+                <button key={r.value} type="button" onClick={() => f('role', r.value)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                    form.role === r.value
+                      ? 'border-teal-500 bg-teal-500/10'
+                      : 'border-zinc-800 bg-zinc-900/20 hover:border-zinc-700'
+                  }`}>
+                  <span className="text-lg flex-shrink-0">{r.label.split(' ')[0]}</span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white">{r.label.split(' ').slice(1).join(' ')}</p>
+                    <p className="text-[9px] text-zinc-500">{r.desc}</p>
+                  </div>
+                  {form.role === r.value && <CheckCircle2 size={14} className="text-teal-500 ml-auto flex-shrink-0" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Fields */}
+          <input required value={form.full_name} onChange={e => f('full_name', e.target.value)}
+            placeholder="Full Name" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 text-white text-sm outline-none focus:border-teal-500 transition-colors" />
+
+          <input required type="email" value={form.email} onChange={e => f('email', e.target.value)}
+            placeholder="Email Address" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 text-white text-sm outline-none focus:border-teal-500 transition-colors" />
+
+          <div className="relative">
+            <input required type={showPw ? 'text' : 'password'} value={form.password}
+              onChange={e => f('password', e.target.value)} placeholder="Password (min. 8 characters)"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-4 pr-12 text-white text-sm outline-none focus:border-teal-500 transition-colors" />
+            <button type="button" onClick={() => setShowPw(v => !v)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors">
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+
+          {/* Email verification notice */}
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-zinc-900/40 border border-zinc-800 text-[9px] text-zinc-400">
+            <Mail size={11} className="text-teal-500 mt-0.5 flex-shrink-0" />
+            A verification link will be sent to your email. You must verify before you can invest or withdraw.
+          </div>
+
+          <button type="submit" disabled={busy}
+            className="w-full py-4 bg-white text-black font-black uppercase tracking-[0.15em] text-xs rounded-xl hover:bg-teal-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy ? <><Loader2 className="animate-spin" size={14} /> Creating Account…</> : 'Activate Connection'}
+          </button>
+        </form>
+
+        <p className="text-center text-[9px] text-zinc-600 uppercase font-bold tracking-widest">
+          Already have an account?{' '}
+          <Link href="/login" className="text-teal-500 hover:text-white transition-colors">Sign In</Link>
+        </p>
+
+        <div className="text-center text-[8px] text-zinc-700 border-t border-zinc-900 pt-4">
+          <ShieldCheck size={9} className="inline text-teal-500/40 mr-1" />
+          Impressions &amp; Impacts Ltd · nestedark@gmail.com · Lagos · London · Dubai
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Resend block ──────────────────────────────────────────────────────────────
+function ResendBlock({ email }: { email: string }) {
+  const [sent,  setSent]  = useState(false);
+  const [busy,  setBusy]  = useState(false);
+  const [error, setError] = useState('');
+
+  const resend = async () => {
+    setBusy(true); setError('');
+    try {
+      await api.post('/api/auth/resend-verification', { email });
+      setSent(true);
+    } catch { setError('Could not resend. Try again in a moment.'); }
+    finally { setBusy(false); }
+  };
+
+  if (sent) return (
+    <p className="text-teal-400 text-xs font-bold">✅ New verification email sent. Check your inbox.</p>
+  );
+
+  return (
+    <div className="space-y-1">
+      <button onClick={resend} disabled={busy}
+        className="w-full py-3 border border-zinc-700 text-zinc-400 font-bold text-xs uppercase tracking-widest rounded-xl hover:border-teal-500 hover:text-teal-500 transition-all flex items-center justify-center gap-2">
+        {busy ? <Loader2 className="animate-spin" size={12} /> : <Mail size={12} />}
+        Resend Verification Email
+      </button>
+      {error && <p className="text-red-400 text-[10px]">{error}</p>}
     </div>
   );
 }
