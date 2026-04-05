@@ -1,202 +1,365 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
-import CurrencySelector from '@/components/CurrencySelector';
-import { useLiveProjects } from '@/hooks/useLiveSystem';
+import Footer from '@/components/Footer';
 import { useCurrency } from '@/hooks/useCurrency';
 import api from '@/lib/api';
-import { Briefcase, TrendingUp, ShieldCheck, Plus, Loader2, Globe, MapPin, Activity, X, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
+import {
+  Search, Filter, MapPin, Calendar, TrendingUp, ShieldCheck,
+  Loader2, Plus, Eye, Heart, Briefcase, Star, Globe, Building2,
+  User, RefreshCw, ChevronRight, X, Bookmark, Tag, LayoutGrid, List
+} from 'lucide-react';
 
-const CATEGORIES = ['Roads','Bridges','Water','Energy','Technology','Housing','Healthcare','Education','Agriculture','Telecommunications'];
+const CATEGORIES   = ['All','Roads','Bridges','Water','Energy','Technology','Housing','Healthcare','Education','Agriculture','Telecommunications','Industrial','Commercial','Residential','Landscape','Renovation','Other'];
+const OWNER_TYPES  = [{ value: '', label: 'All Owners' },{ value: 'INDIVIDUAL', label: 'Individual' },{ value: 'CORPORATE', label: 'Corporate' },{ value: 'PRIVATE_BUSINESS', label: 'Private Business' },{ value: 'DEVELOPER', label: 'Developer' },{ value: 'GOVERNMENT', label: 'Government' }];
+const SORT_OPTIONS = [{ value: 'newest', label: 'Newest First' },{ value: 'budget_high', label: 'Highest Budget' },{ value: 'budget_low', label: 'Lowest Budget' },{ value: 'most_viewed', label: 'Most Viewed' }];
+const OWNER_ICONS: Record<string, any> = { INDIVIDUAL: User, CORPORATE: Building2, PRIVATE_BUSINESS: Briefcase, DEVELOPER: Globe, GOVERNMENT: ShieldCheck };
 
-function BidModal({ project, milestones, onClose, onSuccess }: any) {
-  const [form, setForm] = useState({ milestone_id: milestones[0]?.id || '', amount: '', timeline_days: '90', proposal: '' });
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      await api.post(`/api/projects/${project.id}/apply`, {
-        amount: parseFloat(form.amount),
-        timeline_days: parseInt(form.timeline_days),
-        proposal: form.proposal,
-        milestone_id: form.milestone_id || undefined,
-      });
-      alert('Bid submitted successfully!');
-      onSuccess();
-    } catch (err: any) {
-      alert(err?.response?.data?.error ?? 'Bid submission failed');
-    } finally { setSubmitting(false); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-3xl p-8 space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-xl font-bold uppercase tracking-tight">Submit Bid</h3>
-            <p className="text-zinc-500 text-xs mt-1 uppercase tracking-widest line-clamp-1">{project.title}</p>
-          </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white"><X size={20} /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Bid Amount (USD) *</label>
-              <input required type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-            </div>
-            <div>
-              <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Timeline (days) *</label>
-              <input required type="number" value={form.timeline_days} onChange={e => setForm({ ...form, timeline_days: e.target.value })} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-            </div>
-          </div>
-          <textarea required rows={4} value={form.proposal} onChange={e => setForm({ ...form, proposal: e.target.value })} placeholder="Technical proposal..." className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500 resize-none" />
-          <div className="flex gap-3">
-            <button type="submit" disabled={submitting} className="flex-1 py-4 bg-white text-black font-bold uppercase text-xs tracking-widest rounded-xl hover:bg-teal-500 transition-all flex items-center justify-center gap-2">
-              {submitting ? <Loader2 className="animate-spin" size={14} /> : 'Deploy Bid'}
-            </button>
-            <button type="button" onClick={onClose} className="px-6 py-4 border border-zinc-700 text-zinc-400 font-bold uppercase text-xs rounded-xl hover:text-white">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+function fmtBudget(n: number, fmtFn: (v: number) => string): string {
+  if (!n) return '—';
+  return fmtFn(n);
 }
 
-function NewProjectModal({ onClose, onSuccess }: any) {
-  const [form, setForm] = useState({ title: '', description: '', location: '', country: 'Nigeria', budget: '', category: 'Roads', timeline_months: '24' });
-  const [submitting, setSubmitting] = useState(false);
+interface Project {
+  id: string; project_number: string; title: string; location: string; country: string;
+  budget: number; category: string; status: string; gov_verified: boolean;
+  expected_roi: number; timeline_months: number; owner_type: string; project_type: string;
+  description: string; hero_image_url: string; milestone_count: number; bid_count: number;
+  investor_count: number; total_raised_usd: number; view_count: number; save_count: number;
+  tags: string[]; created_at: string; sponsor_name: string;
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+export default function MarketplacePage() {
+  const { user } = useAuth();
+  const { format } = useCurrency();
+
+  const [projects,    setProjects]    = useState<Project[]>([]);
+  const [total,       setTotal]       = useState(0);
+  const [loading,     setLoading]     = useState(true);
+  const [viewMode,    setViewMode]    = useState<'grid'|'list'>('grid');
+  const [saved,       setSaved]       = useState<Set<string>>(new Set());
+
+  // Search state
+  const [search,     setSearch]     = useState('');
+  const [category,   setCategory]   = useState('All');
+  const [ownerType,  setOwnerType]  = useState('');
+  const [country,    setCountry]    = useState('');
+  const [sort,       setSort]       = useState('newest');
+  const [page,       setPage]       = useState(0);
+  const [showFilters,setShowFilters]= useState(false);
+  const LIMIT = 12;
+
+  // Project number quick search
+  const [projNumQuery, setProjNumQuery] = useState('');
+  const [projNumResult, setProjNumResult] = useState<any[] | null>(null);
+  const [searchingNum, setSearchingNum] = useState(false);
+
+  const load = useCallback(async (reset = false) => {
+    setLoading(true);
     try {
-      await api.post('/api/projects', { ...form, budget: parseFloat(form.budget), timeline_months: parseInt(form.timeline_months) });
-      alert('Project created successfully!');
-      onSuccess();
-    } catch (err: any) {
-      alert(err?.response?.data?.error ?? 'Failed to create project');
-    } finally { setSubmitting(false); }
+      const params: Record<string, any> = {
+        limit: LIMIT, offset: reset ? 0 : page * LIMIT, sort,
+      };
+      if (search)    params.search    = search;
+      if (category !== 'All') params.category = category;
+      if (ownerType) params.owner_type = ownerType;
+      if (country)   params.country   = country;
+
+      const res = await api.get('/api/projects', { params });
+      if (reset) { setProjects(res.data.projects); setPage(0); }
+      else       setProjects(p => [...p, ...res.data.projects]);
+      setTotal(res.data.total);
+    } finally { setLoading(false); }
+  }, [search, category, ownerType, country, sort, page]);
+
+  useEffect(() => { load(true); }, [search, category, ownerType, country, sort]);
+
+  const searchByNumber = async () => {
+    if (!projNumQuery.trim()) return;
+    setSearchingNum(true); setProjNumResult(null);
+    try {
+      const res = await api.get('/api/projects/search', { params: { q: projNumQuery.trim() } });
+      setProjNumResult(res.data.results);
+    } catch { setProjNumResult([]); }
+    finally { setSearchingNum(false); }
   };
 
+  const toggleSave = async (projectId: string) => {
+    if (!user) return;
+    const isSaved = saved.has(projectId);
+    try {
+      if (isSaved) { await api.delete(`/api/projects/${projectId}/save`); setSaved(s => { const n = new Set(s); n.delete(projectId); return n; }); }
+      else         { await api.post(`/api/projects/${projectId}/save`);   setSaved(s => new Set(s).add(projectId)); }
+    } catch {}
+  };
+
+  const OI = ({ type }: { type: string }) => { const Icon = OWNER_ICONS[type] || Briefcase; return <Icon size={11} className="text-zinc-500" />; };
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-3xl p-8 space-y-6 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-xl font-bold uppercase">New Project</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Project Title *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-          <textarea required rows={3} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Description *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500 resize-none" />
-          <div className="grid grid-cols-2 gap-4">
-            <input required value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="City *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-            <input required value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="Country *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col">
+      <Navbar />
+
+      {/* Hero search bar */}
+      <div className="border-b border-zinc-800 bg-zinc-900/40 px-6 py-8">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter italic">Project Marketplace</h1>
+            <p className="text-zinc-500 text-sm">Search by Project ID · Browse by category · Bid or invest from anywhere in the world</p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <input required type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} placeholder="Budget (USD) *" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-            <input type="number" value={form.timeline_months} onChange={e => setForm({ ...form, timeline_months: e.target.value })} placeholder="Months" className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
+
+          {/* Project Number Search */}
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={projNumQuery} onChange={e => setProjNumQuery(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === 'Enter' && searchByNumber()}
+                placeholder="Search by Project ID (e.g. NAP-2026-00042) or keyword…"
+                className="w-full bg-black border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-white text-sm outline-none focus:border-teal-500 transition-colors font-mono" />
+            </div>
+            <button onClick={searchByNumber} disabled={searchingNum}
+              className="px-6 py-3 bg-teal-500 text-black font-bold rounded-xl text-sm hover:bg-teal-400 transition-all flex items-center gap-2 disabled:opacity-50">
+              {searchingNum ? <Loader2 className="animate-spin" size={14} /> : <Search size={14} />} Search
+            </button>
           </div>
-          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none">
+
+          {/* Quick search results */}
+          {projNumResult !== null && (
+            <div className="rounded-2xl border border-zinc-800 bg-black overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">{projNumResult.length} result{projNumResult.length !== 1 ? 's' : ''} for "{projNumQuery}"</p>
+                <button onClick={() => { setProjNumResult(null); setProjNumQuery(''); }} className="text-zinc-600 hover:text-white"><X size={14} /></button>
+              </div>
+              {projNumResult.length === 0
+                ? <p className="px-4 py-6 text-center text-zinc-600 text-sm">No projects found. Check the ID and try again.</p>
+                : projNumResult.map(p => (
+                  <Link key={p.id} href={`/projects/${p.id}`}
+                    className="flex items-center justify-between px-4 py-4 hover:bg-zinc-900/40 transition-colors border-b border-zinc-900 last:border-0">
+                    <div>
+                      <p className="font-bold uppercase text-sm">{p.title}</p>
+                      <div className="flex items-center gap-3 mt-1 text-[9px] text-zinc-500 font-mono">
+                        <span className="text-teal-500">{p.project_number}</span>
+                        <span>{p.location}, {p.country}</span>
+                        <span>{p.category}</span>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-zinc-600" />
+                  </Link>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      </div>
+
+      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-6">
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Text search */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Filter by title, location…"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-4 py-2.5 text-white text-xs outline-none focus:border-teal-500 transition-colors" />
+          </div>
+
+          {/* Category */}
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-teal-500 cursor-pointer">
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <div className="flex gap-3">
-            <button type="submit" disabled={submitting} className="flex-1 py-4 bg-teal-500 text-black font-bold uppercase text-xs rounded-xl hover:bg-teal-400 transition-all flex items-center justify-center">
-              {submitting ? <Loader2 className="animate-spin" size={14} /> : 'Create Project'}
-            </button>
-            <button type="button" onClick={onClose} className="px-6 py-4 border border-zinc-700 text-zinc-400 font-bold uppercase text-xs rounded-xl">Cancel</button>
+
+          {/* Owner type */}
+          <select value={ownerType} onChange={e => setOwnerType(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-teal-500 cursor-pointer">
+            {OWNER_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+
+          {/* Country */}
+          <input value={country} onChange={e => setCountry(e.target.value)}
+            placeholder="Country…"
+            className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-teal-500 w-32" />
+
+          {/* Sort */}
+          <select value={sort} onChange={e => setSort(e.target.value)}
+            className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-teal-500 cursor-pointer">
+            {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+
+          {/* View toggle */}
+          <div className="flex gap-1 border border-zinc-800 rounded-xl p-1">
+            <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-teal-500 text-black' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={14} /></button>
+            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-teal-500 text-black' : 'text-zinc-500 hover:text-white'}`}><List size={14} /></button>
           </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
-export default function ProjectsPage() {
-  const { user, isLoading: authLoading } = useAuth();
-  const router = useRouter();
-  const { projects, isLoading, mutate } = useLiveProjects();
-  const { currency, setCurrency, format } = useCurrency();
-  const [bidProject, setBidProject] = useState<any>(null);
-  const [showNewProject, setShowNewProject] = useState(false);
-  const [geoScope, setGeoScope] = useState<'LOCAL' | 'GLOBAL'>('GLOBAL');
-  const [filter, setFilter] = useState('');
+          {/* Submit CTA */}
+          <Link href="/projects/submit"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white text-black font-bold text-[10px] uppercase tracking-widest rounded-xl hover:bg-teal-500 transition-all ml-auto">
+            <Plus size={11} /> Post Project
+          </Link>
+        </div>
 
-  useEffect(() => {
-    if (!authLoading && !user) router.replace('/login');
-  }, [user, authLoading, router]);
+        {/* Stats row */}
+        <div className="flex items-center gap-3 text-[9px] text-zinc-500 uppercase font-bold tracking-widest">
+          <span>{total.toLocaleString()} project{total !== 1 ? 's' : ''}</span>
+          <span className="text-zinc-700">·</span>
+          <button onClick={() => load(true)} className="hover:text-teal-500 flex items-center gap-1 transition-colors">
+            <RefreshCw size={9} /> Refresh
+          </button>
+        </div>
 
-  if (authLoading || !user) return <div className="h-screen bg-[#050505] flex items-center justify-center"><Loader2 className="animate-spin text-teal-500" size={32} /></div>;
-
-  const isGovt = user.role === 'GOVERNMENT' || user.role === 'ADMIN';
-  const isContractor = user.role === 'CONTRACTOR';
-
-  const filteredProjects = projects.filter((p: any) => {
-    const matchesFilter = !filter || p.category === filter || p.country?.toLowerCase().includes(filter.toLowerCase());
-    return matchesFilter;
-  });
-
-  return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      {bidProject && <BidModal project={bidProject} milestones={[]} onClose={() => setBidProject(null)} onSuccess={() => { setBidProject(null); mutate(); }} />}
-      {showNewProject && <NewProjectModal onClose={() => setShowNewProject(false)} onSuccess={() => { setShowNewProject(false); mutate(); }} />}
-      <Navbar />
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        <header className="mb-8 border-l-2 border-teal-500 pl-6 flex justify-between items-center flex-wrap gap-4">
-          <div>
-            <p className="text-[10px] text-teal-500 uppercase font-bold tracking-[0.2em] mb-2">Infrastructure Feed</p>
-            <h1 className="text-4xl font-black tracking-tighter uppercase italic">Live Projects</h1>
-          </div>
-          <div className="flex gap-3">
-            <CurrencySelector currency={currency} onSelect={setCurrency} compact />
-            {isGovt && (
-              <button onClick={() => setShowNewProject(true)} className="flex items-center gap-2 px-4 py-2 bg-teal-500 text-black font-bold uppercase text-[10px] rounded-xl hover:bg-teal-400 transition-all">
-                <Plus size={12} /> New Project
-              </button>
-            )}
-          </div>
-        </header>
-
-        {isLoading ? (
+        {/* Grid */}
+        {loading && projects.length === 0 ? (
           <div className="py-20 text-center"><Loader2 className="animate-spin text-teal-500 mx-auto" size={28} /></div>
+        ) : projects.length === 0 ? (
+          <div className="py-20 text-center border border-dashed border-zinc-800 rounded-2xl space-y-3">
+            <Search className="text-zinc-700 mx-auto" size={32} />
+            <p className="text-zinc-500 text-sm">No projects match your search</p>
+            <button onClick={() => { setSearch(''); setCategory('All'); setOwnerType(''); setCountry(''); }}
+              className="text-teal-500 text-xs font-bold uppercase hover:text-white transition-colors">Clear filters</button>
+          </div>
         ) : (
-          <div className="grid gap-4">
-            {filteredProjects.map((project: any) => (
-              <div key={project.id} className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all">
-                <div className="flex flex-col md:flex-row justify-between gap-6">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="h-12 w-12 rounded-xl bg-zinc-900 flex items-center justify-center border border-zinc-800 flex-shrink-0">
-                      <Briefcase className="text-teal-500" size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <Link href={`/projects/${project.id}`} className="font-bold text-base uppercase tracking-tight hover:text-teal-500 transition-colors flex items-center gap-2">
-                          {project.title} <ExternalLink size={14} className="opacity-50" />
-                        </Link>
-                        {project.gov_verified && <ShieldCheck size={12} className="text-teal-500" />}
-                      </div>
-                      <p className="text-zinc-500 text-xs">{project.location}, {project.country}</p>
-                      <p className="text-zinc-600 text-[10px] mt-1 line-clamp-2">{project.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col justify-between items-end gap-3 flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Budget</p>
-                      <p className="font-mono text-lg font-bold text-white">{format(Number(project.budget))}</p>
-                    </div>
-                    {isContractor && (
-                      <button onClick={() => setBidProject(project)} className="flex items-center gap-2 px-5 py-3 bg-white text-black font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-teal-500 transition-all">
-                        <Activity size={12} /> Submit Bid
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+          <div className={viewMode === 'grid'
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5'
+            : 'flex flex-col gap-3'
+          }>
+            {projects.map(p => (
+              viewMode === 'grid'
+                ? <ProjectCard key={p.id} p={p} format={format} saved={saved.has(p.id)} onSave={() => toggleSave(p.id)} />
+                : <ProjectRow  key={p.id} p={p} format={format} saved={saved.has(p.id)} onSave={() => toggleSave(p.id)} />
             ))}
           </div>
         )}
+
+        {/* Load more */}
+        {projects.length < total && (
+          <div className="text-center pt-4">
+            <button onClick={() => { setPage(p => p + 1); load(false); }} disabled={loading}
+              className="px-8 py-3 border border-zinc-700 text-zinc-400 font-bold text-xs uppercase tracking-widest rounded-xl hover:text-white hover:border-zinc-500 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto">
+              {loading ? <Loader2 className="animate-spin" size={12} /> : null}
+              Load More ({total - projects.length} remaining)
+            </button>
+          </div>
+        )}
       </main>
+      <Footer />
+    </div>
+  );
+}
+
+// ── Project card (grid view) ──────────────────────────────────────────────────
+function ProjectCard({ p, format, saved, onSave }: { p: Project; format: (n: number) => string; saved: boolean; onSave: () => void }) {
+  const raised = Number(p.total_raised_usd) || 0;
+  const budget = Number(p.budget)            || 1;
+  const pct    = Math.min((raised / budget) * 100, 100);
+  const OIcon  = OWNER_ICONS[p.owner_type] || Briefcase;
+
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all overflow-hidden group flex flex-col">
+      {/* Image */}
+      <div className="relative h-44 bg-zinc-900 overflow-hidden">
+        {p.hero_image_url
+          ? <img src={p.hero_image_url} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          : <div className="w-full h-full flex items-center justify-center"><Building2 className="text-zinc-700" size={40} /></div>
+        }
+        <div className="absolute top-3 left-3 flex gap-1.5">
+          <span className="text-[8px] bg-black/70 text-teal-500 font-mono font-bold px-2 py-1 rounded border border-teal-500/30">{p.project_number}</span>
+          {p.gov_verified && <span className="text-[8px] bg-teal-500/20 text-teal-500 font-bold px-2 py-1 rounded border border-teal-500/40 flex items-center gap-1"><ShieldCheck size={8} /> Verified</span>}
+        </div>
+        <button onClick={onSave} className={`absolute top-3 right-3 p-1.5 rounded-lg border transition-all ${saved ? 'bg-teal-500 border-teal-400 text-black' : 'bg-black/60 border-zinc-700 text-zinc-400 hover:text-white'}`}>
+          <Bookmark size={12} />
+        </button>
+      </div>
+
+      <div className="p-5 flex flex-col flex-1 space-y-3">
+        <div>
+          <div className="flex items-start gap-2 mb-1">
+            <OIcon size={11} className="text-zinc-500 mt-1 flex-shrink-0" />
+            <h3 className="font-bold uppercase tracking-tight text-sm line-clamp-2 flex-1">{p.title}</h3>
+          </div>
+          <div className="flex items-center gap-2 text-[9px] text-zinc-500">
+            <MapPin size={9} /> {p.location}, {p.country}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+            <p className="text-[8px] text-zinc-600 uppercase font-bold">Budget</p>
+            <p className="text-sm font-mono font-bold text-white">{format(budget)}</p>
+          </div>
+          <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+            <p className="text-[8px] text-zinc-600 uppercase font-bold">ROI / yr</p>
+            <p className="text-sm font-mono font-bold text-teal-400">{p.expected_roi ?? 12}%</p>
+          </div>
+        </div>
+
+        {/* Funding bar */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-[8px] text-zinc-500 font-bold uppercase">
+            <span>Funding</span><span className="text-teal-500">{pct.toFixed(0)}%</span>
+          </div>
+          <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-teal-500" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+
+        {/* Tags */}
+        {p.tags?.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {p.tags.slice(0, 3).map(t => (
+              <span key={t} className="text-[8px] bg-zinc-900 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full">{t}</span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-[8px] text-zinc-600 pt-1">
+          <span className="flex items-center gap-1"><Eye size={8} /> {Number(p.view_count) || 0}</span>
+          <span className="flex items-center gap-1"><Briefcase size={8} /> {Number(p.bid_count) || 0} bids</span>
+          <span className="flex items-center gap-1"><TrendingUp size={8} /> {Number(p.investor_count) || 0} investors</span>
+        </div>
+
+        <Link href={`/projects/${p.id}`}
+          className="mt-auto flex items-center justify-center gap-2 py-3 bg-white text-black font-bold text-[10px] uppercase tracking-widest rounded-xl hover:bg-teal-500 transition-all">
+          View & Bid <ChevronRight size={11} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Project row (list view) ───────────────────────────────────────────────────
+function ProjectRow({ p, format, saved, onSave }: { p: Project; format: (n: number) => string; saved: boolean; onSave: () => void }) {
+  const OIcon = OWNER_ICONS[p.owner_type] || Briefcase;
+  return (
+    <div className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all flex items-center gap-5">
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[8px] text-teal-500 font-mono font-bold">{p.project_number}</span>
+          <h3 className="font-bold uppercase tracking-tight text-sm">{p.title}</h3>
+          {p.gov_verified && <ShieldCheck size={11} className="text-teal-500" />}
+        </div>
+        <div className="flex items-center gap-3 text-[9px] text-zinc-500">
+          <span className="flex items-center gap-1"><MapPin size={8} /> {p.location}, {p.country}</span>
+          <span className="flex items-center gap-1"><OIcon size={8} /> {p.owner_type?.replace('_', ' ')}</span>
+          <span>{p.category}</span>
+        </div>
+      </div>
+      <div className="text-right flex-shrink-0">
+        <p className="font-mono font-bold text-white">{format(Number(p.budget))}</p>
+        <p className="text-[9px] text-teal-400">{p.expected_roi ?? 12}% ROI</p>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button onClick={onSave} className={`p-1.5 rounded-lg border transition-all ${saved ? 'bg-teal-500 border-teal-400 text-black' : 'border-zinc-700 text-zinc-500 hover:text-teal-500'}`}>
+          <Bookmark size={12} />
+        </button>
+        <Link href={`/projects/${p.id}`}
+          className="flex items-center gap-1 px-4 py-2 bg-white text-black font-bold text-[9px] uppercase tracking-widest rounded-lg hover:bg-teal-500 transition-all">
+          View <ChevronRight size={10} />
+        </Link>
+      </div>
     </div>
   );
 }
