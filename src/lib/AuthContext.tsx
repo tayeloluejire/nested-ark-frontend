@@ -2,49 +2,68 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from './api';
 
-export type UserRole = 'GOVERNMENT' | 'INVESTOR' | 'CONTRACTOR' | 'ADMIN' | 'VERIFIER' | 'SUPPLIER' | 'BANK';
+// ── 8 distinct operator roles ─────────────────────────────────────────────────
+export type UserRole =
+  | 'DEVELOPER'   // Project owners — submit, manage, 3D/2D uploads
+  | 'INVESTOR'    // Capital providers — portfolio, yield, Paystack
+  | 'CONTRACTOR'  // Builders — browse by trade, bid on milestones
+  | 'VERIFIER'    // Independent auditors — site inspection, release gate
+  | 'SUPPLIER'    // Material supply chain — dispatch, delivery tracking
+  | 'BANK'        // Institutional capital — tranche management, ledger
+  | 'GOVERNMENT'  // Regulators — mandate projects, approve milestones
+  | 'ADMIN';      // Super admin — system-wide access, user management
 
-interface User { id: string; email: string; role: UserRole; full_name: string; }
+interface User {
+  id: string; email: string; role: UserRole; full_name: string;
+  email_verified?: boolean; totp_enabled?: boolean;
+}
+
 interface AuthContextType {
   user: User | null; token: string | null; isLoading: boolean; isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<string>;
+  login:    (email: string, password: string) => Promise<string>;
   register: (email: string, password: string, full_name: string, role: string) => Promise<string>;
-  logout: () => void;
+  logout:   () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Single source of truth for post-login routing */
+// ── Single source of truth for post-login routing ─────────────────────────────
 export function getRoleRoute(role: UserRole): string {
   switch (role) {
-    case 'ADMIN':       return '/admin';
-    case 'GOVERNMENT':  return '/gov';        // ← dedicated Government portal
-    case 'INVESTOR':    return '/portfolio';   // ← Investor lands on portfolio
-    case 'CONTRACTOR':  return '/projects';
-    case 'SUPPLIER':    return '/supplier';
-    case 'BANK':        return '/bank';
-    case 'VERIFIER':    return '/admin/approval';
-    default:            return '/dashboard';
+    case 'ADMIN':      return '/admin';
+    case 'GOVERNMENT': return '/gov';
+    case 'DEVELOPER':  return '/projects/my';   // Owner: see their projects
+    case 'INVESTOR':   return '/portfolio';
+    case 'CONTRACTOR': return '/projects';       // Bid marketplace
+    case 'VERIFIER':   return '/admin/approval'; // Audit queue
+    case 'SUPPLIER':   return '/supplier';
+    case 'BANK':       return '/bank';
+    default:           return '/dashboard';
   }
 }
 
-/** Page-level access guard — used by each page's useEffect */
+// ── Page-level access guard ───────────────────────────────────────────────────
 export function canAccess(role: UserRole, path: string): boolean {
-  if (role === 'ADMIN') return true;            // Admin sees everything
+  if (role === 'ADMIN') return true;
+
   const rules: Record<string, UserRole[]> = {
-    '/admin':          ['ADMIN'],               // ADMIN ONLY for /admin/*
-    '/gov':            ['GOVERNMENT'],          // Government dedicated portal
-    '/portfolio':      ['INVESTOR'],
-    '/investments':    ['INVESTOR'],
-    '/supplier':       ['SUPPLIER'],
-    '/bank':           ['BANK'],
-    '/projects':       ['GOVERNMENT', 'CONTRACTOR', 'SUPPLIER', 'ADMIN'],
-    '/milestones':     ['GOVERNMENT', 'CONTRACTOR', 'ADMIN', 'VERIFIER'],
-    '/ledger':         ['ADMIN', 'GOVERNMENT', 'BANK', 'INVESTOR', 'VERIFIER'],
-    '/dashboard':      ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'GOVERNMENT', 'ADMIN', 'VERIFIER'],
-    '/kyc':            ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK'],
-    '/map':            ['INVESTOR', 'GOVERNMENT', 'ADMIN', 'BANK', 'CONTRACTOR'],
+    '/admin':              ['ADMIN'],
+    '/gov':                ['GOVERNMENT'],
+    '/portfolio':          ['INVESTOR'],
+    '/investments':        ['INVESTOR'],
+    '/projects/my':        ['DEVELOPER', 'GOVERNMENT', 'ADMIN'],
+    '/projects/submit':    ['DEVELOPER', 'GOVERNMENT', 'ADMIN', 'CONTRACTOR'],
+    '/projects':           ['DEVELOPER', 'GOVERNMENT', 'CONTRACTOR', 'SUPPLIER', 'ADMIN', 'INVESTOR', 'VERIFIER', 'BANK'],
+    '/milestones':         ['GOVERNMENT', 'DEVELOPER', 'CONTRACTOR', 'ADMIN', 'VERIFIER'],
+    '/ledger':             ['ADMIN', 'GOVERNMENT', 'BANK', 'INVESTOR', 'VERIFIER', 'DEVELOPER'],
+    '/supplier':           ['SUPPLIER'],
+    '/bank':               ['BANK'],
+    '/dashboard':          ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'GOVERNMENT', 'ADMIN', 'VERIFIER', 'DEVELOPER'],
+    '/kyc':                ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'DEVELOPER'],
+    '/map':                ['INVESTOR', 'GOVERNMENT', 'ADMIN', 'BANK', 'CONTRACTOR', 'DEVELOPER', 'VERIFIER'],
+    '/contractor-profile': ['CONTRACTOR', 'ADMIN'],
   };
+
   for (const [prefix, allowed] of Object.entries(rules)) {
     if (path === prefix || path.startsWith(prefix + '/')) {
       return (allowed as string[]).includes(role);
@@ -53,23 +72,26 @@ export function canAccess(role: UserRole, path: string): boolean {
   return true; // public routes
 }
 
+// ── Provider ──────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user,      setUser]      = useState<User | null>(null);
+  const [token,     setToken]     = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUser = useCallback(async (authToken: string) => {
     try {
       const res = await api.get('/api/auth/me', { headers: { Authorization: `Bearer ${authToken}` } });
-      setUser(res.data.user); setToken(authToken);
+      setUser(res.data.user);
+      setToken(authToken);
     } catch {
-      localStorage.removeItem('token'); setToken(null); setUser(null);
+      localStorage.removeItem('token');
+      setToken(null); setUser(null);
     } finally { setIsLoading(false); }
   }, []);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) fetchUser(storedToken);
+    const stored = localStorage.getItem('token');
+    if (stored) fetchUser(stored);
     else setIsLoading(false);
   }, [fetchUser]);
 
