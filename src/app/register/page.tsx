@@ -1,4 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -6,6 +8,7 @@ import Image from 'next/image';
 import api from '@/lib/api';
 import { useAuth, getRoleRoute, UserRole } from '@/lib/AuthContext';
 import { Loader2, Eye, EyeOff, CheckCircle2, Mail, ShieldCheck, Globe } from 'lucide-react';
+
 
 // ── 7 self-registerable roles (ADMIN is system-assigned only) ─────────────────
 const ROLES = [
@@ -15,7 +18,7 @@ const ROLES = [
     label: 'Developer / Owner',
     desc: 'Post projects, upload 2D/3D plans, hire contractors and track builds from anywhere',
     group: 'Project & Execution',
-    highlight: true, // Most important role for diaspora use case
+    highlight: true,
   },
   {
     value: 'INVESTOR',
@@ -72,12 +75,12 @@ export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuth();
 
-  const [form,   setForm]   = useState({ full_name: '', email: '', password: '', role: 'DEVELOPER' });
-  const [showPw, setShowPw] = useState(false);
-  const [busy,   setBusy]   = useState(false);
-  const [error,  setError]  = useState('');
-  const [phase,  setPhase]  = useState<Phase>('form');
-  const [sentTo, setSentTo] = useState('');
+  const [form,       setForm]       = useState({ full_name: '', email: '', password: '', role: 'DEVELOPER' });
+  const [showPw,     setShowPw]     = useState(false);
+  const [busy,       setBusy]       = useState(false);
+  const [error,      setError]      = useState('');
+  const [phase,      setPhase]      = useState<Phase>('form');
+  const [sentTo,     setSentTo]     = useState('');
   const [isDiaspora, setIsDiaspora] = useState(false);
 
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
@@ -92,6 +95,7 @@ export default function RegisterPage() {
       setSentTo(form.email);
       setPhase('verify_sent');
     } catch (ex: any) {
+      console.error('Registration Error:', ex);
       setError(ex?.response?.data?.error ?? 'Registration failed. Please try again.');
     } finally { setBusy(false); }
   };
@@ -116,7 +120,7 @@ export default function RegisterPage() {
           Verification link sent to <strong className="text-white">{sentTo}</strong>. Click it to activate your operator account.
         </p>
         <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 space-y-2 text-left text-[10px] text-zinc-400">
-          {['Check inbox and spam folder','Click the Verify My Account button','Link expires in 24 hours','Sign in once verified to access your command center'].map((s, i) => (
+          {['Check inbox and spam folder', 'Click the Verify My Account button', 'Link expires in 24 hours', 'Sign in once verified to access your command center'].map((s, i) => (
             <div key={i} className="flex items-start gap-2">
               <CheckCircle2 size={10} className="text-teal-500 mt-0.5 flex-shrink-0" /> {s}
             </div>
