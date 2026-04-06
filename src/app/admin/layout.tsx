@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 const navItems = [
   { href: '/admin',           label: 'Command Center', icon: LayoutDashboard, exact: true },
