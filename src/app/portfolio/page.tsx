@@ -1,223 +1,152 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { useAuth, canAccess } from '@/lib/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { useCurrency } from '@/hooks/useCurrency';
 import api from '@/lib/api';
 import {
-  TrendingUp, Shield, Wallet, DollarSign, Loader2, RefreshCw,
-  ExternalLink, CheckCircle2, Download, CreditCard, Activity,
-  ArrowUpRight, Lock, Building2, Wifi, AlertTriangle, ShieldCheck,
-  BadgeCheck
+  TrendingUp, DollarSign, Zap, ShieldCheck, Package,
+  RefreshCw, Wifi, BarChart3, Activity, ArrowUpRight,
+  Clock, Globe, Loader2, AlertCircle, Building2, CircleDollarSign
 } from 'lucide-react';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface Summary {
-  total_invested_ngn: number;
-  estimated_earnings_ngn: number;
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface PortfolioSummary {
+  total_invested_ngn:        number;
+  estimated_earnings_ngn:    number;
   available_to_withdraw_ngn: number;
-  escrow_balance: number;
-  escrow_held: number;
-  active_positions: number;
-  milestones_paid: number;
-  kyc_status: string;
-  latest_payment: { amount_ngn: number; paid_at: string; project_title: string } | null;
-  roi_rate: number;
-  accrual_months: number;
+  escrow_held_ngn:           number;
+  portfolio_value_ngn:       number;
+  active_positions:          number;
+  roi_rate:                  number;
+  milestones_paid:           number;
+  kyc_status:                string;
 }
 
 interface Investment {
-  id: string;
-  project_id: string;
-  amount: number;
-  status: string;
-  created_at: string;
-  project_title: string;
-  location: string;
-  country: string;
-  project_budget: number;
-  expected_roi: number;
-  timeline_months: number;
+  id: string; project_id: string; project_title: string; amount: number;
+  status: string; created_at: string;
 }
 
 interface Payment {
-  id: string;
-  amount_ngn: number;
-  status: string;
-  created_at: string;
-  paid_at?: string;
-  project_title: string;
-  paystack_reference: string;
-  payment_channel?: string;
+  id: string; paystack_reference: string; amount_ngn: number; amount_usd: number;
+  status: string; channel: string; project_title: string; country: string;
+  paid_at: string; created_at: string;
 }
 
-// ── Helper — safe NGN formatter (never returns NaN) ───────────────────────────
+// ── Formatters ─────────────────────────────────────────────────────────────────
 function fmtNgn(raw: any): string {
   const n = Number(raw);
-  if (!Number.isFinite(n) || isNaN(n) || n === 0) return '₦0';
-  if (n >= 1_000_000_000) return `₦${(n / 1_000_000_000).toFixed(2)}B`;
-  if (n >= 1_000_000)     return `₦${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000)         return `₦${(n / 1_000).toFixed(1)}k`;
+  if (!Number.isFinite(n) || isNaN(n)) return '₦0';
+  if (n === 0) return '₦0';
+  if (n > 0 && n < 100) return `₦${n.toFixed(2)}`;   // show cents for tiny accruals
+  if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000)     return `₦${(n / 1_000).toFixed(1)}k`;
   return `₦${Math.round(n).toLocaleString()}`;
 }
 
-// ── Withdrawal modal ──────────────────────────────────────────────────────────
-function WithdrawModal({ available, onClose }: { available: number; onClose: () => void }) {
-  const [form, setForm] = useState({ bank_name: '', account_number: '', account_name: '', amount: '' });
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const [err,  setErr]  = useState('');
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000)    return `${Math.floor(diff / 1_000)}s ago`;
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000)return `${Math.floor(diff / 3_600_000)}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(form.amount);
-    if (!amt || amt <= 0)   { setErr('Enter a valid amount'); return; }
-    if (amt > available)    { setErr(`Max available: ${fmtNgn(available)}`); return; }
-    setBusy(true); setErr('');
-    try {
-      await api.post('/api/escrow/withdraw', {
-        amount: amt, bank_name: form.bank_name,
-        account_number: form.account_number, account_name: form.account_name,
-      });
-      setDone(true);
-    } catch (ex: any) {
-      setErr(ex?.response?.data?.error ?? 'Request failed — try again.');
-    } finally { setBusy(false); }
-  };
-
-  if (done) return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-zinc-950 border border-teal-500/30 rounded-3xl p-8 text-center space-y-5">
-        <div className="relative mx-auto w-16 h-16">
-          <div className="absolute inset-0 rounded-full bg-teal-500/10 animate-ping" />
-          <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-teal-500/20 border-2 border-teal-500/40">
-            <CheckCircle2 className="text-teal-500" size={28} />
-          </div>
-        </div>
-        <h3 className="text-xl font-black uppercase">Request Submitted</h3>
-        <p className="text-zinc-400 text-sm">Funds will be transferred within 1–3 business days via Paystack Transfer.</p>
-        <button onClick={onClose} className="w-full py-3 bg-white text-black font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-teal-500 transition-all">Done</button>
-      </div>
-    </div>
-  );
+// ── ROI Calculator ─────────────────────────────────────────────────────────────
+function RoiCalc({ roiRate }: { roiRate: number }) {
+  const [amount, setAmount] = useState(50000);
+  const yield6m = amount * (roiRate / 100) * 0.5;
+  const yieldAnn = amount * (roiRate / 100);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-3xl p-8 space-y-5">
-        <div>
-          <h3 className="text-xl font-bold uppercase">Withdraw Earnings</h3>
-          <p className="text-zinc-500 text-xs mt-1">Available: <span className="text-teal-500 font-bold">{fmtNgn(available)}</span></p>
+    <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-4">
+      <h3 className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest flex items-center gap-2">
+        <BarChart3 size={12} className="text-teal-500" /> ROI Calculator
+        <span className="ml-auto text-teal-500 font-mono">{roiRate}% p.a.</span>
+      </h3>
+      <div>
+        <label className="text-[9px] text-zinc-500 uppercase font-bold block mb-2">
+          Investment Amount (NGN)
+        </label>
+        <input
+          type="range" min={5000} max={5_000_000} step={5000}
+          value={amount} onChange={e => setAmount(Number(e.target.value))}
+          className="w-full accent-teal-500"
+        />
+        <div className="flex justify-between text-[9px] text-zinc-700 mt-1">
+          <span>₦5,000</span>
+          <span className="text-white font-mono font-bold">{fmtNgn(amount)}</span>
+          <span>₦5,000,000</span>
         </div>
-        <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-400 font-bold uppercase tracking-widest flex items-start gap-2">
-          <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-          Principal locked until project tenure ends. Only realized earnings withdrawable.
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="p-3 rounded-xl bg-teal-500/5 border border-teal-500/20 text-center">
+          <p className="text-[8px] text-zinc-500 uppercase font-bold">6-month Yield</p>
+          <p className="text-teal-400 font-mono font-black text-lg mt-1">+{fmtNgn(yield6m)}</p>
         </div>
-        <form onSubmit={submit} className="space-y-3">
-          {[
-            { key: 'bank_name',      ph: 'Bank Name (e.g. Access Bank)' },
-            { key: 'account_number', ph: 'Account Number — 10-digit NUBAN', max: 10 },
-            { key: 'account_name',   ph: 'Account Name (as registered with bank)' },
-          ].map(f => (
-            <input key={f.key} required value={(form as any)[f.key]}
-              onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-              placeholder={f.ph} maxLength={f.max}
-              className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-          ))}
-          <input required type="number" value={form.amount}
-            onChange={e => setForm({ ...form, amount: e.target.value })}
-            placeholder={`Amount (NGN) — max ${fmtNgn(available)}`} max={available}
-            className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-500" />
-          {err && <p className="text-red-400 text-xs font-bold">{err}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={busy}
-              className="flex-1 py-4 bg-white text-black font-bold uppercase text-xs tracking-widest rounded-xl hover:bg-teal-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-              {busy ? <Loader2 className="animate-spin" size={14} /> : <><ArrowUpRight size={12} /> Request Payout</>}
-            </button>
-            <button type="button" onClick={onClose}
-              className="px-5 py-4 border border-zinc-700 text-zinc-400 font-bold uppercase text-xs rounded-xl hover:text-white">Cancel</button>
-          </div>
-        </form>
+        <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
+          <p className="text-[8px] text-zinc-500 uppercase font-bold">Annual ROI</p>
+          <p className="text-emerald-400 font-mono font-black text-lg mt-1">+{roiRate}% Est.</p>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Inline ROI calculator ─────────────────────────────────────────────────────
-function RoiCalc() {
-  const [amount, setAmount] = useState(50_000);
-  const earn6m = Math.round(amount * 0.12 * (6 / 12));
-  return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Investment Amount (NGN)</p>
-        <p className="font-mono text-teal-500 font-bold">₦{amount.toLocaleString()}</p>
-      </div>
-      <input type="range" min={5_000} max={5_000_000} step={5_000} value={amount}
-        onChange={e => setAmount(Number(e.target.value))} className="w-full accent-teal-500" />
-      <div className="flex justify-between text-[9px] text-zinc-600 font-mono">
-        <span>₦5,000</span><span>₦5,000,000</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 pt-1">
-        <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
-          <p className="text-[9px] text-zinc-500 uppercase font-bold">6-month Yield</p>
-          <p className="font-mono text-teal-400 font-black text-lg mt-1">+₦{earn6m.toLocaleString()}</p>
-        </div>
-        <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-center">
-          <p className="text-[9px] text-zinc-500 uppercase font-bold">Annual ROI</p>
-          <p className="font-mono text-white font-black text-lg mt-1">+12% Est.</p>
-        </div>
-      </div>
-      <Link href="/investments"
-        className="flex items-center justify-center gap-2 w-full py-3 bg-white text-black font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-teal-500 transition-all mt-1">
-        <TrendingUp size={12} /> Fund a Project
-      </Link>
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────────────────────
 export default function PortfolioPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const { format } = useCurrency();
 
-  const [summary,      setSummary]      = useState<Summary | null>(null);
-  const [investments,  setInvestments]  = useState<Investment[]>([]);
-  const [payments,     setPayments]     = useState<Payment[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [lastSync,     setLastSync]     = useState('');
-  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [summary,     setSummary]     = useState<PortfolioSummary | null>(null);
+  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [payments,    setPayments]    = useState<Payment[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [lastSync,    setLastSync]    = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user)                                  { router.replace('/login'); return; }
-    if (!authLoading && user && !canAccess(user.role, '/portfolio')) router.replace('/dashboard');
+    if (!authLoading && !user) router.replace('/login');
+    if (!authLoading && user && !['INVESTOR', 'ADMIN', 'DEVELOPER'].includes(user.role)) {
+      router.replace('/dashboard');
+    }
   }, [user, authLoading, router]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [s, inv, pay] = await Promise.allSettled([
+      const [sumRes, invRes, payRes] = await Promise.all([
         api.get('/api/portfolio/summary'),
         api.get('/api/investments/my'),
         api.get('/api/payments/history'),
       ]);
-      if (s.status   === 'fulfilled') setSummary(s.value.data.summary);
-      if (inv.status === 'fulfilled') setInvestments(inv.value.data.investments ?? []);
-      if (pay.status === 'fulfilled') setPayments(pay.value.data.transactions   ?? []);
+      setSummary(sumRes.data.summary);
+      setInvestments(invRes.data.investments ?? []);
+      setPayments(payRes.data.transactions ?? []);
       setLastSync(new Date().toLocaleTimeString());
-    } finally { if (!silent) setLoading(false); }
+    } catch (e) {
+      console.error('Portfolio load failed', e);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
+  useEffect(() => { if (user) load(); }, [user, load]);
+
   useEffect(() => {
-    if (user) {
-      load();
-      const iv = setInterval(() => load(true), 30_000);
-      return () => clearInterval(iv);
-    }
-  }, [user, load]);
+    if (!autoRefresh) { if (timerRef.current) clearInterval(timerRef.current); return; }
+    timerRef.current = setInterval(() => load(true), 30_000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [autoRefresh, load]);
 
   if (authLoading || !user) return (
     <div className="h-screen bg-[#050505] flex items-center justify-center">
@@ -225,242 +154,233 @@ export default function PortfolioPage() {
     </div>
   );
 
-  // All numbers come from the server — no client-side arithmetic on raw API data
-  const totalNgn     = Number(summary?.total_invested_ngn        ?? 0);
-  const earningsNgn  = Number(summary?.estimated_earnings_ngn    ?? 0);
-  const availableNgn = Number(summary?.available_to_withdraw_ngn ?? 0);
-  const escrowHeld   = Number(summary?.escrow_held               ?? 0);
-  const positions    = Number(summary?.active_positions          ?? 0);
-  const milestonesPd = Number(summary?.milestones_paid           ?? 0);
-  const kycStatus    = summary?.kyc_status ?? 'NOT_SUBMITTED';
-  const kycVerified  = kycStatus === 'VERIFIED';
+  const roi  = summary?.roi_rate ?? 12;
+  const kycOk = summary?.kyc_status === 'VERIFIED';
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
-      {showWithdraw && (
-        <WithdrawModal available={availableNgn} onClose={() => { setShowWithdraw(false); load(true); }} />
-      )}
-
       <Navbar />
 
-      {/* System pulse */}
+      {/* Live pulse bar */}
       <div className="border-b border-zinc-800 bg-black px-6 py-2 flex items-center gap-5 text-[9px] font-mono uppercase tracking-widest overflow-x-auto">
-        <span className="flex items-center gap-1.5 text-teal-500 flex-shrink-0"><Wifi size={8} /> Portfolio Live</span>
-        {lastSync && <span className="text-zinc-600 flex-shrink-0">Synced {lastSync}</span>}
-        <span className="text-zinc-400 flex-shrink-0">{positions} position{positions !== 1 ? 's' : ''}</span>
-        <span className={`flex items-center gap-1.5 flex-shrink-0 font-bold ${kycVerified ? 'text-teal-500' : 'text-amber-400'}`}>
-          {kycVerified ? <BadgeCheck size={8} /> : <AlertTriangle size={8} />}
-          KYC: {kycStatus}
-          {!kycVerified && <Link href="/kyc" className="underline ml-1 hover:text-white">Verify →</Link>}
+        <span className="flex items-center gap-1.5 text-teal-500 flex-shrink-0">
+          <Wifi size={8} className="animate-pulse" /> Portfolio Live
         </span>
+        {lastSync && <span className="text-zinc-600 flex-shrink-0">Synced {lastSync}</span>}
+        <button
+          onClick={() => setAutoRefresh(v => !v)}
+          className={`flex items-center gap-1 flex-shrink-0 transition-colors ${autoRefresh ? 'text-teal-500' : 'text-zinc-600 hover:text-white'}`}
+        >
+          <Activity size={8} /> {autoRefresh ? 'Live' : 'Paused'}
+        </button>
+        <span className="text-zinc-700 flex-shrink-0">·</span>
+        <span className="text-zinc-500 flex-shrink-0">{summary?.active_positions ?? 0} positions</span>
+        {summary && (
+          <span className={`flex-shrink-0 font-bold ${kycOk ? 'text-teal-500' : 'text-amber-400'}`}>
+            KYC: {summary.kyc_status}
+            {!kycOk && (
+              <Link href="/kyc" className="ml-2 underline text-amber-400 hover:text-white">
+                Verify →
+              </Link>
+            )}
+          </span>
+        )}
       </div>
 
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-10">
+      <main className="flex-1 max-w-7xl mx-auto px-6 py-10 w-full space-y-8">
 
         {/* Header */}
         <header className="border-l-2 border-teal-500 pl-6 flex items-start justify-between flex-wrap gap-4">
           <div>
             <p className="text-[9px] text-teal-500 uppercase font-bold tracking-[0.2em] mb-1">Investor Command</p>
-            <h1 className="text-4xl font-black tracking-tighter uppercase italic">My Portfolio</h1>
-            <p className="text-zinc-500 text-sm mt-1">Welcome, {user.full_name}</p>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic">My Portfolio</h1>
+            <p className="text-zinc-500 text-sm mt-1">Welcome, {user.full_name?.split(' ')[0] ?? 'Investor'}</p>
           </div>
-          <button onClick={() => load(false)} disabled={loading}
-            className="p-2 rounded-lg border border-zinc-800 text-zinc-500 hover:text-teal-500 transition-all">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setAutoRefresh(v => !v)}
+              className={`p-2 border rounded-xl transition-all ${autoRefresh ? 'border-teal-500/40 text-teal-500' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+            >
+              <Activity size={14} />
+            </button>
+            <button
+              onClick={() => load(false)} disabled={loading}
+              className="p-2 border border-zinc-800 rounded-xl text-zinc-500 hover:text-teal-500 hover:border-teal-500/40 transition-all"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </header>
 
-        {/* Capital Cards — all values from /api/portfolio/summary (server-computed) */}
-        {loading && !summary
-          ? <div className="py-10 text-center"><Loader2 className="animate-spin text-teal-500 mx-auto" size={28} /></div>
-          : (
-          <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 relative overflow-hidden">
-              <div className="absolute top-3 right-3 opacity-5"><TrendingUp size={44} /></div>
-              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.2em] mb-1">Portfolio Value</p>
-              <p className="text-2xl font-black font-mono">{fmtNgn(totalNgn)}</p>
-              <p className="text-[10px] text-zinc-600 mt-1">Escrow secured</p>
-              {totalNgn > 0 && (
-                <p className="text-[9px] text-zinc-500 mt-0.5">{format(totalNgn / 1379)} USD equiv.</p>
-              )}
-            </div>
-
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 relative overflow-hidden">
-              <div className="absolute top-3 right-3 opacity-5"><DollarSign size={44} /></div>
-              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.2em] mb-1">Realized Earnings (12%)</p>
-              <p className="text-2xl font-black font-mono text-teal-400">
-                {earningsNgn > 0 ? `+${fmtNgn(earningsNgn)}` : '₦0'}
-              </p>
-              <p className="text-[10px] text-zinc-600 mt-1">Above inflation yield</p>
-              <p className="text-[9px] text-zinc-500 mt-0.5">6-month accrual on committed capital</p>
-            </div>
-
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 relative overflow-hidden">
-              <div className="absolute top-3 right-3 opacity-5"><Wallet size={44} /></div>
-              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.2em] mb-1">Available Liquidity</p>
-              <p className="text-2xl font-black font-mono text-emerald-400">{fmtNgn(availableNgn)}</p>
-              <p className="text-[10px] text-zinc-600 mt-1">Ready for withdrawal</p>
-              <button
-                onClick={() => kycVerified ? setShowWithdraw(true) : router.push('/kyc')}
-                className="mt-3 px-4 py-1.5 bg-white text-black font-bold text-[9px] uppercase tracking-widest rounded-lg hover:bg-teal-500 transition-all">
-                {kycVerified ? 'Withdraw' : 'Verify KYC first'}
-              </button>
-            </div>
-
-            <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/30 relative overflow-hidden">
-              <div className="absolute top-3 right-3 opacity-5"><Shield size={44} /></div>
-              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.2em] mb-1">Escrow Secured</p>
-              <p className="text-2xl font-black font-mono text-teal-500">{fmtNgn(escrowHeld)}</p>
-              <p className="text-[10px] text-zinc-600 mt-1">Tri-layer verified escrow</p>
-              <p className="text-[9px] text-zinc-500 mt-0.5">{milestonesPd} milestone{milestonesPd !== 1 ? 's' : ''} paid out</p>
-            </div>
-
-          </section>
+        {loading && !summary && (
+          <div className="py-20 text-center">
+            <Loader2 className="animate-spin text-teal-500 mx-auto mb-4" size={32} />
+            <p className="text-zinc-500 text-sm">Loading portfolio…</p>
+          </div>
         )}
 
-        {/* ROI Calculator */}
-        <section className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 max-w-xl">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-4">ROI Calculator</h3>
-          <RoiCalc />
-        </section>
+        {summary && (
+          <>
+            {/* ── KPI Cards ──────────────────────────────────────────────── */}
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {
+                  label: 'Portfolio Value',
+                  value: fmtNgn(summary.portfolio_value_ngn),
+                  sub:   'Escrow secured',
+                  icon:  DollarSign,
+                  color: 'text-teal-400',
+                },
+                {
+                  label: `Realized Earnings (${roi}%)`,
+                  value: fmtNgn(summary.estimated_earnings_ngn),
+                  sub:   `Above inflation yield\n6-month accrual on committed capital`,
+                  icon:  TrendingUp,
+                  color: 'text-emerald-400',
+                },
+                {
+                  label: 'Available Liquidity',
+                  value: fmtNgn(summary.available_to_withdraw_ngn),
+                  sub:   kycOk ? 'Ready for withdrawal' : 'Verify KYC first',
+                  icon:  CircleDollarSign,
+                  color: kycOk ? 'text-white' : 'text-amber-400',
+                },
+                {
+                  label: 'Escrow Secured',
+                  value: fmtNgn(summary.escrow_held_ngn),
+                  sub:   `Tri-layer verified escrow\n${summary.milestones_paid} milestones paid out`,
+                  icon:  ShieldCheck,
+                  color: 'text-teal-400',
+                },
+              ].map(card => {
+                const Icon = card.icon;
+                return (
+                  <div key={card.label} className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest leading-tight">{card.label}</p>
+                      <Icon size={13} className={card.color} />
+                    </div>
+                    <p className={`text-2xl font-black font-mono ${card.color}`}>{card.value}</p>
+                    <p className="text-[9px] text-zinc-600 whitespace-pre-line">{card.sub}</p>
+                  </div>
+                );
+              })}
+            </section>
 
-        {/* Active positions */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-            <Activity size={14} className="text-teal-500" /> My Active Positions ({investments.length})
-          </h2>
+            {/* ── ROI Calculator ─────────────────────────────────────────── */}
+            <RoiCalc roiRate={roi} />
 
-          {loading && investments.length === 0 && (
-            <div className="py-8 text-center"><Loader2 className="animate-spin text-teal-500 mx-auto" size={20} /></div>
-          )}
-
-          {!loading && investments.length === 0 && (
-            <div className="py-16 text-center border border-dashed border-zinc-800 rounded-2xl space-y-4">
-              <Lock className="text-zinc-700 mx-auto" size={32} />
-              <p className="text-zinc-500 text-sm">No active positions yet</p>
-              <Link href="/investments"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-teal-500 transition-all">
-                <TrendingUp size={12} /> Browse Investment Nodes
-              </Link>
+            {/* ── Quick actions ──────────────────────────────────────────── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'Fund a Project',   href: '/investments',  icon: TrendingUp,       color: 'text-teal-500'   },
+                { label: 'Browse Nodes',     href: '/projects',     icon: Building2,        color: 'text-emerald-500'},
+                { label: 'KYC Verification', href: '/kyc',          icon: ShieldCheck,      color: 'text-amber-400'  },
+                { label: 'Global Ledger',    href: '/ledger',       icon: BarChart3,        color: 'text-purple-400' },
+              ].map(a => {
+                const Icon = a.icon;
+                return (
+                  <Link key={a.label} href={a.href}
+                    className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all text-center space-y-2">
+                    <Icon size={18} className={`${a.color} mx-auto`} />
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">{a.label}</p>
+                  </Link>
+                );
+              })}
             </div>
-          )}
 
-          {investments.map(inv => {
-            const principal  = Number(inv.amount);
-            const roiPct     = Number(inv.expected_roi) || 12;
-            const tenure     = Number(inv.timeline_months) || 24;
-            const elapsed    = Math.max(0, Math.floor((Date.now() - new Date(inv.created_at).getTime()) / (1000 * 60 * 60 * 24 * 30.5)));
-            const progress   = Math.min((elapsed / tenure) * 100, 100);
-            const remaining  = Math.max(tenure - elapsed, 0);
-            const estYield   = Math.round(principal * (roiPct / 100) * (6 / 12));
-
-            return (
-              <div key={inv.id} className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all">
-                <div className="flex flex-col md:flex-row gap-6 justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-bold uppercase tracking-tight">{inv.project_title}</h3>
-                      <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${
-                        inv.status === 'COMMITTED' ? 'border-teal-500/40 text-teal-500' : 'border-zinc-700 text-zinc-500'
-                      }`}>{inv.status}</span>
-                    </div>
-                    {inv.location && <p className="text-zinc-500 text-xs">{inv.location}, {inv.country}</p>}
-                    <div className="mt-4 space-y-1">
-                      <div className="flex justify-between text-[9px] text-zinc-500 uppercase font-bold">
-                        <span>Tenure — {elapsed}mo elapsed</span>
-                        <span>{remaining}mo of {tenure}mo remaining</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-teal-500 transition-all" style={{ width: `${progress}%` }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-3 min-w-[180px] flex-shrink-0">
-                    <div className="text-right">
-                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Principal (USD)</p>
-                      <p className="font-mono text-xl font-bold">${principal.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Est. Yield ({roiPct}% p.a.)</p>
-                      <p className="font-mono text-teal-400 font-bold">+${estYield.toLocaleString()}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Link href={`/projects/${inv.project_id}`}
-                        className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-teal-500 hover:border-teal-500/40 transition-all">
-                        <ExternalLink size={10} /> Pitch
-                      </Link>
-                      <button className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-white transition-all">
-                        <Download size={10} /> Statement
-                      </button>
-                    </div>
-                  </div>
+            {/* ── Active Positions ───────────────────────────────────────── */}
+            <section className="space-y-3">
+              <h2 className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest flex items-center gap-2">
+                <Activity size={12} className="text-teal-500" /> My Active Positions ({investments.length})
+              </h2>
+              {investments.length === 0 ? (
+                <div className="p-8 rounded-2xl border border-dashed border-zinc-800 text-center">
+                  <Building2 className="text-zinc-700 mx-auto mb-3" size={32} />
+                  <p className="text-zinc-500 text-sm font-bold">No active positions yet</p>
+                  <p className="text-zinc-700 text-xs mt-1">Fund a project to start earning</p>
+                  <Link href="/projects"
+                    className="inline-block mt-4 px-6 py-2.5 bg-teal-500 text-black font-black text-[9px] uppercase tracking-widest rounded-xl hover:bg-white transition-all">
+                    Browse Investment Nodes
+                  </Link>
                 </div>
-              </div>
-            );
-          })}
-        </section>
+              ) : (
+                investments.map(inv => (
+                  <div key={inv.id} className="flex items-center gap-4 p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 hover:border-zinc-700 transition-all">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold uppercase truncate">{inv.project_title ?? 'Project'}</p>
+                      <p className="text-[9px] text-zinc-600 mt-0.5">
+                        {relTime(inv.created_at)} · {inv.status}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-mono font-bold text-teal-400">{format(Number(inv.amount))}</p>
+                      <p className="text-[8px] text-emerald-400 font-bold">+{roi}% p.a.</p>
+                    </div>
+                    <Link href={`/projects/${inv.project_id}`}
+                      className="p-2 border border-zinc-800 rounded-lg hover:border-teal-500/40 transition-all flex-shrink-0">
+                      <ArrowUpRight size={12} className="text-zinc-500" />
+                    </Link>
+                  </div>
+                ))
+              )}
+            </section>
 
-        {/* Payment history — only this user's payments */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-            <CreditCard size={14} className="text-teal-500" /> Payment History
-          </h2>
-          <div className="rounded-2xl border border-zinc-800 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs min-w-[560px]">
-                <thead className="bg-zinc-900 text-zinc-500 uppercase text-[9px] tracking-widest">
-                  <tr>
-                    {['Date','Project','Amount (NGN)','Channel','Status','Reference'].map(h => (
-                      <th key={h} className="px-5 py-4">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-900">
-                  {payments.length === 0 && (
-                    <tr><td colSpan={6} className="px-5 py-8 text-center text-zinc-600">No payment history yet</td></tr>
-                  )}
-                  {payments.map(p => (
-                    <tr key={p.id} className="hover:bg-zinc-900/40 transition-colors">
-                      <td className="px-5 py-4 text-zinc-400 font-mono text-[10px]">
-                        {new Date(p.paid_at ?? p.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-5 py-4 text-white font-bold uppercase text-[10px] max-w-[130px] truncate">{p.project_title ?? '—'}</td>
-                      <td className="px-5 py-4 font-mono text-white">₦{Number(p.amount_ngn).toLocaleString()}</td>
-                      <td className="px-5 py-4 text-zinc-500 uppercase text-[9px]">{p.payment_channel ?? 'Paystack'}</td>
-                      <td className="px-5 py-4">
-                        <span className={`text-[8px] px-2 py-0.5 rounded border font-bold uppercase ${
-                          p.status === 'SUCCESS' ? 'border-teal-500/40 text-teal-500' :
-                          p.status === 'PENDING' ? 'border-amber-500/40 text-amber-400' :
-                          'border-red-500/40 text-red-400'
-                        }`}>{p.status}</span>
-                      </td>
-                      <td className="px-5 py-4 text-zinc-600 font-mono text-[9px] max-w-[120px] truncate">{p.paystack_reference}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        {/* Quick links */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { href: '/investments', label: 'Browse Nodes',      icon: TrendingUp,  desc: 'Fund new projects' },
-            { href: '/kyc',         label: 'KYC Verification',  icon: ShieldCheck, desc: 'Unlock withdrawals' },
-            { href: '/ledger',      label: 'Global Ledger',     icon: Activity,    desc: 'Immutable audit trail' },
-            { href: '/map',         label: 'Project Map',       icon: Building2,   desc: 'Geo-visual overview' },
-          ].map(item => (
-            <Link key={item.href} href={item.href}
-              className="p-5 rounded-xl border border-zinc-800 bg-zinc-900/20 hover:border-teal-500/40 hover:bg-teal-500/5 transition-all">
-              <item.icon size={16} className="text-teal-500 mb-3" />
-              <p className="text-xs font-bold uppercase tracking-wider text-white">{item.label}</p>
-              <p className="text-[9px] text-zinc-500 mt-1">{item.desc}</p>
-            </Link>
-          ))}
-        </section>
+            {/* ── Payment History ────────────────────────────────────────── */}
+            <section className="space-y-3">
+              <h2 className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest flex items-center gap-2">
+                <Clock size={12} className="text-teal-500" /> Payment History
+              </h2>
+              {payments.length === 0 ? (
+                <div className="p-6 rounded-xl border border-dashed border-zinc-800 text-center text-zinc-700 text-xs">
+                  No payment records yet
+                </div>
+              ) : (
+                <div className="rounded-xl border border-zinc-800 overflow-hidden">
+                  <table className="w-full text-[10px]">
+                    <thead className="bg-zinc-900/40 border-b border-zinc-800">
+                      <tr>
+                        {['Date', 'Project', 'Amount (NGN)', 'Channel', 'Status', 'Reference'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-zinc-500 uppercase font-bold tracking-widest">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((p, i) => (
+                        <tr key={p.id} className={`border-b border-zinc-900 ${i % 2 === 0 ? 'bg-zinc-900/10' : ''}`}>
+                          <td className="px-4 py-3 text-zinc-400 font-mono whitespace-nowrap">
+                            {new Date(p.paid_at || p.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-3 text-white font-bold truncate max-w-[120px]">
+                            {p.project_title ?? '—'}
+                          </td>
+                          <td className="px-4 py-3 text-teal-400 font-mono font-bold">
+                            {fmtNgn(p.amount_ngn)}
+                          </td>
+                          <td className="px-4 py-3 text-zinc-500 uppercase">{p.channel ?? '—'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                              p.status === 'SUCCESS'
+                                ? 'bg-teal-500/10 text-teal-500 border border-teal-500/20'
+                                : p.status === 'PENDING'
+                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-zinc-700 font-mono text-[8px] truncate max-w-[120px]">
+                            {p.paystack_reference}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
       <Footer />
     </div>
