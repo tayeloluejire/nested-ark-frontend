@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @layer base {
-  /* ── Dark Mode (default — Premium Deep Black) ─────────────────────── */
+  /* ── Dark Mode (Nested Ark Premium) ─────────────────────── */
   :root,
   [data-theme="dark"] {
     --background:   #050505;
@@ -15,11 +15,9 @@
     --border-hover: #27272a;
     --teal-500:     #14b8a6;
     --teal-glow:    rgba(20,184,166,0.08);
-    --invert-btn:   #ffffff;
-    --invert-text:  #000000;
   }
 
-  /* ── Light Mode ───────────────────────────────────────────────────── */
+  /* ── Light Mode (Professional Ledger) ───────────────────── */
   [data-theme="light"] {
     --background:   #f4f6f8;
     --bg-secondary: #eef0f3;
@@ -32,97 +30,32 @@
     --border-hover: #cbd5e1;
     --teal-500:     #0d9488;
     --teal-glow:    rgba(13,148,136,0.06);
-    --invert-btn:   #0f172a;
-    --invert-text:  #ffffff;
-  }
-
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  html {
-    scroll-behavior: smooth;
-    -webkit-font-smoothing: antialiased;
-    background-color: var(--background);
   }
 
   body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
+    background-color: var(--background) !important;
+    color: var(--foreground) !important;
     transition: background-color 0.25s ease, color 0.25s ease;
   }
 
-  /* ── Theme-aware utility overrides ─────────────────────────────────── */
+  /* ── FORCE OVERRIDES (Ensures UI doesn't break) ── */
+  [data-theme="light"] .bg-black,
+  [data-theme="light"] .bg-\[\#050505\] { background-color: var(--background) !important; }
+  
+  [data-theme="light"] .text-white { color: var(--foreground) !important; }
+  
+  [data-theme="light"] .bg-zinc-900,
+  [data-theme="light"] .bg-zinc-900\/50 { background-color: var(--bg-secondary) !important; }
 
-  /* Borders */
-  .theme-border   { border-color: var(--border); }
-  .theme-border-h:hover { border-color: var(--border-hover); }
+  [data-theme="light"] .border-zinc-800,
+  [data-theme="light"] .border-zinc-700 { border-color: var(--border) !important; }
 
-  /* Backgrounds */
-  .theme-bg       { background-color: var(--background); }
-  .theme-bg-card  { background-color: var(--bg-card); }
-  .theme-bg-hover:hover { background-color: var(--bg-hover); }
-
-  /* Text */
-  .theme-text       { color: var(--foreground); }
-  .theme-text-muted { color: var(--fg-muted); }
-
-  /* Zinc overrides in light mode — zinc-* classes become slate in light */
-  [data-theme="light"] .text-zinc-800 { color: #1e293b; }
-  [data-theme="light"] .text-zinc-700 { color: #334155; }
-  [data-theme="light"] .text-zinc-600 { color: #475569; }
-  [data-theme="light"] .text-zinc-500 { color: #64748b; }
-  [data-theme="light"] .text-zinc-400 { color: #94a3b8; }
-  [data-theme="light"] .text-white    { color: #0f172a; }
-
-  [data-theme="light"] .bg-\[\#050505\]   { background-color: var(--background); }
-  [data-theme="light"] .bg-black          { background-color: #ffffff; }
-  [data-theme="light"] .bg-black\/60      { background-color: rgba(255,255,255,0.85); }
-  [data-theme="light"] .bg-black\/80      { background-color: rgba(255,255,255,0.92); }
-  [data-theme="light"] .bg-black\/90      { background-color: rgba(255,255,255,0.95); }
-
-  [data-theme="light"] .bg-zinc-900       { background-color: #f1f5f9; }
-  [data-theme="light"] .bg-zinc-900\/10   { background-color: rgba(241,245,249,0.6); }
-  [data-theme="light"] .bg-zinc-900\/20   { background-color: rgba(241,245,249,0.8); }
-  [data-theme="light"] .bg-zinc-900\/30   { background-color: rgba(241,245,249,0.9); }
-  [data-theme="light"] .bg-zinc-900\/40   { background-color: #f1f5f9; }
-  [data-theme="light"] .bg-zinc-900\/50   { background-color: #f8fafc; }
-
-  [data-theme="light"] .border-zinc-900   { border-color: #e2e8f0; }
-  [data-theme="light"] .border-zinc-800   { border-color: #e2e8f0; }
-  [data-theme="light"] .border-zinc-700   { border-color: #cbd5e1; }
-
-  [data-theme="light"] .hover\:bg-zinc-900:hover { background-color: #f1f5f9; }
-  [data-theme="light"] .hover\:border-zinc-700:hover { border-color: #94a3b8; }
-
-  [data-theme="light"] .backdrop-blur-xl  { backdrop-filter: blur(16px); }
-
-  /* Sticky nav in light mode */
-  [data-theme="light"] nav.sticky,
-  [data-theme="light"] nav[class*="sticky"] {
-    border-bottom-color: #e2e8f0;
-    box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+  /* ── Smooth Transitions ── */
+  * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.05s linear;
   }
 }
 
 @layer utilities {
-  .text-balance { text-wrap: balance; }
-
-  .animate-in {
-    animation: fadeIn 0.5s ease-out forwards;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* Theme transition — applied globally */
-  .theme-transition {
-    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
-  }
+  .theme-transition { transition: all 0.3s ease; }
 }
