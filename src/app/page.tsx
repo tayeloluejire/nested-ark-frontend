@@ -9,6 +9,7 @@ import {
   DollarSign, Activity, Search, ArrowRight, CheckCircle2
 } from 'lucide-react';
 import MarketTicker from '@/components/MarketTicker';
+import ThemeToggle from '@/components/ThemeToggle';
 
 interface MarketSummary {
   active_projects: number;
@@ -23,8 +24,8 @@ interface MarketSummary {
 export default function Home() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [summary, setSummary]   = useState<MarketSummary | null>(null);
-  const [searchId, setSearchId] = useState('');
+  const [summary, setSummary]     = useState<MarketSummary | null>(null);
+  const [searchId, setSearchId]   = useState('');
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
@@ -70,15 +71,20 @@ export default function Home() {
               Nested Ark <span className="text-teal-500 text-[10px] align-top">OS</span>
             </h1>
           </div>
-          <div className="flex items-center gap-6">
+
+          <div className="flex items-center gap-3 md:gap-6">
             <Link href="/projects" className="text-zinc-600 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-colors hidden sm:block">
               Marketplace
             </Link>
             <Link href="/login" className="text-zinc-500 hover:text-white text-[9px] font-bold uppercase tracking-widest transition-colors">
               Sign In
             </Link>
-            <Link href="/register"
-              className="bg-white text-black px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-teal-500 transition-all">
+            {/* Theme toggle in landing nav */}
+            <ThemeToggle compact />
+            <Link
+              href="/register"
+              className="bg-white text-black px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-teal-500 transition-all"
+            >
               Apply for Access
             </Link>
           </div>
