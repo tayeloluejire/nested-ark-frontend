@@ -16,6 +16,7 @@ import {
   ArrowUpRight, Lock, Building2, Wifi, AlertTriangle, ShieldCheck,
   BadgeCheck, BarChart3
 } from 'lucide-react';
+import InvestmentCertificate from '@/components/InvestmentCertificate';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Summary {
@@ -484,9 +485,20 @@ export default function PortfolioPage() {
                         className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-teal-500 hover:border-teal-500/40 transition-all">
                         <ExternalLink size={10} /> Pitch
                       </Link>
-                      <button className="flex items-center gap-1 px-3 py-2 border border-zinc-700 text-zinc-400 font-bold rounded-lg text-[9px] uppercase hover:text-white transition-all">
-                        <Download size={10} /> Statement
-                      </button>
+                      <InvestmentCertificate
+                        investment={{
+                          id: inv.id,
+                          amount: inv.amount,
+                          created_at: inv.created_at,
+                          project_title: inv.project_title ?? 'Infrastructure Project',
+                          project_id: inv.project_id,
+                          status: inv.status,
+                        }}
+                        ledgerHash={''}
+                        investorName={user.full_name ?? 'Investor'}
+                        roiRate={Number(inv.expected_roi) || roiRate}
+                        projectNumber={(inv as any).project_number}
+                      />
                     </div>
                   </div>
                 </div>

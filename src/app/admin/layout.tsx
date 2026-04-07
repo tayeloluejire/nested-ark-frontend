@@ -6,7 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import {
   LayoutDashboard, ShieldCheck, Briefcase, Users, Database,
-  Megaphone, LogOut, ArrowLeft, Menu, X, DollarSign
+  Megaphone, LogOut, ArrowLeft, Menu, X, DollarSign,
+  Camera
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/admin/users',     label: 'Users',          icon: Users },
   { href: '/admin/news',      label: 'Ticker & Ads',   icon: Megaphone },
   { href: '/admin/ledger',    label: 'Ledger',         icon: Database },
+  { href: '/admin/drone',     label: 'Drone Upload',   icon: Camera },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
