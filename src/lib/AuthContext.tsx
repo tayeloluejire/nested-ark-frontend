@@ -32,10 +32,10 @@ export function getRoleRoute(role: UserRole): string {
   switch (role) {
     case 'ADMIN':      return '/admin';
     case 'GOVERNMENT': return '/gov';
-    case 'DEVELOPER':  return '/projects/my';   // Owner: see their projects
+    case 'DEVELOPER':  return '/projects/my';
     case 'INVESTOR':   return '/portfolio';
-    case 'CONTRACTOR': return '/projects';       // Bid marketplace
-    case 'VERIFIER':   return '/admin/approval'; // Audit queue
+    case 'CONTRACTOR': return '/projects';
+    case 'VERIFIER':   return '/admin/approval';
     case 'SUPPLIER':   return '/supplier';
     case 'BANK':       return '/bank';
     default:           return '/dashboard';
@@ -49,8 +49,8 @@ export function canAccess(role: UserRole, path: string): boolean {
   const rules: Record<string, UserRole[]> = {
     '/admin':              ['ADMIN'],
     '/gov':                ['GOVERNMENT'],
-    '/portfolio':          ['INVESTOR'],
-    '/investments':        ['INVESTOR'],
+    '/portfolio':          ['INVESTOR', 'ADMIN'],
+    '/investments':        ['INVESTOR', 'ADMIN'],
     '/projects/my':        ['DEVELOPER', 'GOVERNMENT', 'ADMIN'],
     '/projects/submit':    ['DEVELOPER', 'GOVERNMENT', 'ADMIN', 'CONTRACTOR'],
     '/projects':           ['DEVELOPER', 'GOVERNMENT', 'CONTRACTOR', 'SUPPLIER', 'ADMIN', 'INVESTOR', 'VERIFIER', 'BANK'],
@@ -62,6 +62,8 @@ export function canAccess(role: UserRole, path: string): boolean {
     '/kyc':                ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'DEVELOPER'],
     '/map':                ['INVESTOR', 'GOVERNMENT', 'ADMIN', 'BANK', 'CONTRACTOR', 'DEVELOPER', 'VERIFIER'],
     '/contractor-profile': ['CONTRACTOR', 'ADMIN'],
+    '/about':              ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'GOVERNMENT', 'ADMIN', 'VERIFIER', 'DEVELOPER'],
+    '/landing':            ['INVESTOR', 'CONTRACTOR', 'SUPPLIER', 'BANK', 'GOVERNMENT', 'ADMIN', 'VERIFIER', 'DEVELOPER'],
   };
 
   for (const [prefix, allowed] of Object.entries(rules)) {
