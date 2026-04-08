@@ -5,7 +5,8 @@ import {
   ArrowRight, ShieldCheck, TrendingUp, Building2, Users, Globe,
   CheckCircle2, Lock, Eye, Cpu, Scale, FileText, MapPin,
   DollarSign, Zap, Home, Factory, TreePine, Wrench, BarChart3,
-  BadgeCheck, ChevronDown, Star, Play, RefreshCw
+  BadgeCheck, ChevronDown, Star, Play, RefreshCw, 
+  Database, Camera, Briefcase, HardHat // <--- Add these missing icons
 } from 'lucide-react';
 import MarketTicker from '@/components/MarketTicker';
 import ThemeToggle from '@/components/ThemeToggle';
