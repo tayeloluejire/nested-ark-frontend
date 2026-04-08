@@ -1,19 +1,21 @@
 import axios from 'axios';
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nested-ark-api-22.onrender.com';
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://nested-ark-api-22.onrender.com',
-  timeout: 30000, // 30s — Render free tier can be slow on cold start
+  baseURL: BASE_URL,
+  // 60s timeout — Render free tier can take 30–60s to wake from cold start.
+  // The home page fires a silent /api/health ping on load so the server is warm
+  // by the time the user actually clicks Register or Login.
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
-  // DO NOT set withCredentials: true — we use Bearer tokens (Authorization header),
-  // not cookies. withCredentials: true requires the backend to return an exact
-  // origin (not wildcard), and causes preflight failures when misconfigured.
   withCredentials: false,
 });
 
-// Attach Bearer token from localStorage on every request
+// ── Attach Bearer token on every request ─────────────────────────────────────
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
@@ -24,19 +26,34 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Global response error handler — surface clean messages
+// ── Global response error handler ────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.code === 'ECONNABORTED') {
-      console.error('API timeout — Render may be on cold start, retry in a moment.');
+  async (error) => {
+    const config = error.config;
+
+    // Render cold-start: auto-retry once after 3s
+    if (
+      error.code === 'ECONNABORTED' &&
+      config &&
+      !config._retried
+    ) {
+      config._retried = true;
+      await new Promise(r => setTimeout(r, 3000));
+      return api(config);
     }
+
+    if (error.code === 'ECONNABORTED') {
+      console.warn('API still unresponsive after retry. The backend may be starting up.');
+    }
+
+    // Token expired — clear storage (AuthContext will handle redirect)
     if (error.response?.status === 401) {
-      // Token expired — clear storage (AuthContext will handle redirect)
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
       }
     }
+
     return Promise.reject(error);
   }
 );
