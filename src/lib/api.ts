@@ -58,4 +58,15 @@ api.interceptors.response.use(
   }
 );
 
+// ── Server warm-up ping ──────────────────────────────────────────────────────
+// Render free tier sleeps after 15 min of inactivity (cold start = 30–60s).
+// We fire a silent GET /api/health when the module loads so the server is warm
+// by the time the user submits a real request. Errors are silently swallowed.
+if (typeof window !== 'undefined') {
+  // Only runs in browser, not during SSR/SSG
+  setTimeout(() => {
+    api.get('/api/health').catch(() => {});
+  }, 500); // slight delay so it doesn't block page paint
+}
+
 export default api;
