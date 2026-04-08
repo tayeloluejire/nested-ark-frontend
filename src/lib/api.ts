@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nested-ark-api-22.onrender.com';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nested-ark-api-v3.onrender.com';
 
 const api = axios.create({
   baseURL: BASE_URL,
