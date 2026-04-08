@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   /* ── Dark Mode (Nested Ark Premium) ─────────────────────── */
@@ -36,21 +38,22 @@
     background-color: var(--background) !important;
     color: var(--foreground) !important;
     transition: background-color 0.25s ease, color 0.25s ease;
+    margin: 0;
+    padding: 0;
   }
 
-  /* ── FORCE OVERRIDES (Ensures UI doesn't break) ── */
+  /* ── Force Overrides for Theme Consistency ── */
   [data-theme="light"] .bg-black,
   [data-theme="light"] .bg-\[\#050505\] { background-color: var(--background) !important; }
-  
+
   [data-theme="light"] .text-white { color: var(--foreground) !important; }
-  
+
   [data-theme="light"] .bg-zinc-900,
   [data-theme="light"] .bg-zinc-900\/50 { background-color: var(--bg-secondary) !important; }
 
   [data-theme="light"] .border-zinc-800,
   [data-theme="light"] .border-zinc-700 { border-color: var(--border) !important; }
 
-  /* ── Smooth Transitions ── */
   * {
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.05s linear;
   }
@@ -58,4 +61,5 @@
 
 @layer utilities {
   .theme-transition { transition: all 0.3s ease; }
+  .text-shadow-glow { text-shadow: 0 0 20px rgba(20,184,166,0.3); }
 }
