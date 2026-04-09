@@ -1,16 +1,15 @@
 import axios from 'axios';
 
+// FORCE v3 as the hardcoded fallback to ensure we don't hit the blocked v2 server
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nested-ark-api-v3.onrender.com';
 
 const api = axios.create({
   baseURL: BASE_URL,
   // 60s timeout — Render free tier can take 30–60s to wake from cold start.
-  // The home page fires a silent /api/health ping on load so the server is warm
-  // by the time the user actually clicks Register or Login.
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
-    Accept: 'application/json',
+    'Accept': 'application/json',
   },
   withCredentials: false,
 });
@@ -32,14 +31,16 @@ api.interceptors.response.use(
   async (error) => {
     const config = error.config;
 
-    // Render cold-start: auto-retry once after 3s
+    // Handle Render cold-start or network timeouts
+    // Added 503 (Service Unavailable) which Render often sends during a spin-up
     if (
-      error.code === 'ECONNABORTED' &&
       config &&
-      !config._retried
+      !config._retried &&
+      (error.code === 'ECONNABORTED' || error.response?.status === 503 || error.response?.status === 504)
     ) {
       config._retried = true;
-      await new Promise(r => setTimeout(r, 3000));
+      // Increased delay to 5s to give Render more time to spin up
+      await new Promise(r => setTimeout(r, 5000));
       return api(config);
     }
 
@@ -47,7 +48,7 @@ api.interceptors.response.use(
       console.warn('API still unresponsive after retry. The backend may be starting up.');
     }
 
-    // Token expired — clear storage (AuthContext will handle redirect)
+    // Token expired — clear storage
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
@@ -59,14 +60,13 @@ api.interceptors.response.use(
 );
 
 // ── Server warm-up ping ──────────────────────────────────────────────────────
-// Render free tier sleeps after 15 min of inactivity (cold start = 30–60s).
-// We fire a silent GET /api/health when the module loads so the server is warm
-// by the time the user submits a real request. Errors are silently swallowed.
 if (typeof window !== 'undefined') {
-  // Only runs in browser, not during SSR/SSG
+  // Fire a silent health check to "wake up" the Render instance immediately on page load
   setTimeout(() => {
-    api.get('/api/health').catch(() => {});
-  }, 500); // slight delay so it doesn't block page paint
+    api.get('/api/health').catch(() => {
+      // Silently catch error if server is still sleeping
+    });
+  }, 1000); 
 }
 
 export default api;
