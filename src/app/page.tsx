@@ -6,7 +6,7 @@ import {
   CheckCircle2, Lock, Eye, Cpu, Scale, FileText, MapPin,
   DollarSign, Zap, Home, Factory, Wrench, BarChart3,
   Database, Camera, ChevronRight, Star, Quote,
-  Users, Landmark, TreePine, Play
+  Users, Landmark, TreePine, Play, Info, UserCheck, Award, Mail
 } from 'lucide-react';
 import Image from 'next/image';
 import MarketTicker from '@/components/MarketTicker';
@@ -20,7 +20,7 @@ import api from '@/lib/api';
 function useBackendWarmup() {
   useEffect(() => {
     const ping = () => {
-      fetch('https://nested-ark-api-22.onrender.com/api/health', {
+      fetch('https://nested-ark-api-v3.onrender.com/api/health', {
         method: 'GET',
         cache: 'no-store',
       }).catch(() => {}); // silent — we don't need the response
@@ -202,6 +202,7 @@ export default function HomePage() {
             <a href="#problem"  className="text-zinc-500 hover:text-white transition-colors">Why It Exists</a>
             <a href="#projects" className="text-zinc-500 hover:text-white transition-colors">Project Types</a>
             <a href="#roles"    className="text-zinc-500 hover:text-white transition-colors">Who It's For</a>
+            <a href="#howitworks" className="text-zinc-500 hover:text-white transition-colors">How It Works</a>
             <a href="#trust"    className="text-zinc-500 hover:text-white transition-colors">Trust Layer</a>
             <a href="#diaspora" className="text-zinc-500 hover:text-white transition-colors">Diaspora</a>
             <Link href="/about" className="text-zinc-500 hover:text-teal-500 transition-colors">About</Link>
@@ -224,8 +225,12 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_0%,#14b8a610_0%,transparent_100%)] pointer-events-none" />
 
         <div className="relative space-y-7">
-          {/* Trust badges */}
+          {/* Pilot Mode + Trust badges */}
           <div className="flex flex-wrap items-center justify-center gap-2">
+            {/* ── PILOT MODE BADGE — honest signal that builds trust ── */}
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-400/50 bg-amber-400/10 text-amber-300 text-[9px] font-black uppercase tracking-widest animate-pulse">
+              <Info size={9} /> Pilot Phase · Open Beta
+            </span>
             <Tag color="teal"><ShieldCheck size={9} /> Tri-Layer Verified</Tag>
             <Tag color="emerald"><Lock size={9} /> Paystack Escrow</Tag>
             <Tag color="amber"><Cpu size={9} /> AI + Human + Drone</Tag>
@@ -433,7 +438,7 @@ export default function HomePage() {
       </section>
 
       {/* ── HOW IT WORKS ─────────────────────────────────────────────────────── */}
-      <section className="border-y border-zinc-900 bg-zinc-900/10 py-24">
+      <section id="howitworks" className="border-y border-zinc-900 bg-zinc-900/10 py-24">
         <div className="max-w-7xl mx-auto px-6 space-y-14">
           <div className="text-center space-y-4">
             <Tag color="amber">How It Works</Tag>
@@ -545,7 +550,7 @@ export default function HomePage() {
       </section>
 
       {/* ── TRUST / DRONE PROOF ──────────────────────────────────────────────── */}
-      <section id="trust" className="border-y border-zinc-900 bg-black py-24">
+      <section id="proof" className="border-y border-zinc-900 bg-black py-24">
         <div className="max-w-7xl mx-auto px-6 space-y-14">
           <div className="text-center space-y-4">
             <Tag color="blue"><Eye size={9} /> Proof of Work</Tag>
@@ -702,6 +707,173 @@ export default function HomePage() {
             })}
           </div>
         </div>
+      </section>
+
+      {/* ── TRUST ENGINEERING ────────────────────────────────────────────────── */}
+      {/* Added in response to pilot feedback: "trust is the only barrier left" */}
+      <section id="trust" className="max-w-7xl mx-auto px-6 py-24 space-y-16">
+
+        {/* ── Section header ── */}
+        <div className="text-center space-y-4">
+          <Tag color="teal"><ShieldCheck size={9} /> Trust Engineering</Tag>
+          <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter italic">
+            Trust Is <span className="text-teal-500">Engineered.</span><br />
+            Not Promised.
+          </h2>
+          <p className="text-zinc-500 text-sm max-w-2xl mx-auto leading-relaxed">
+            We know the most common question is: <em className="text-zinc-300">"Can I trust this with my money?"</em> — 
+            so we built an answer into every layer of the platform. Here is exactly why your funds are safe.
+          </p>
+        </div>
+
+        {/* ── Why funds are safe — 3 pillars ── */}
+        <div className="grid md:grid-cols-3 gap-6">
+          {[
+            {
+              icon: Lock,
+              color: 'teal',
+              border: 'border-teal-500/20',
+              bg: 'bg-teal-500/5',
+              title: 'Your Money Never Touches the Contractor',
+              body: 'When you invest, your funds go directly into a Paystack escrow account — not into our bank account, and certainly not to any contractor. Paystack is a licensed Nigerian financial institution regulated by the CBN. We are not the custodian. They are.',
+              proof: 'Paystack escrow · CBN regulated · No direct access',
+            },
+            {
+              icon: CheckCircle2,
+              color: 'emerald',
+              border: 'border-emerald-500/20',
+              bg: 'bg-emerald-500/5',
+              title: 'Three Independent Parties Must Confirm Work Before Any Release',
+              body: 'No contractor ever sees a naira of your investment until three completely independent parties confirm the milestone is complete: our AI image analysis, a human auditor on the ground, and drone footage of the actual site. All three must pass. Any one failure blocks the release.',
+              proof: 'AI + Human Auditor + Drone · All 3 required',
+            },
+            {
+              icon: Database,
+              color: 'amber',
+              border: 'border-amber-500/20',
+              bg: 'bg-amber-500/5',
+              title: 'Every Event is Permanently, Immutably Recorded',
+              body: 'Every investment, verification, release, and rejection is SHA-256 hashed and chained to a permanent ledger. This record cannot be edited, deleted, or reversed — not by us, not by anyone. Your investment is on the record forever. You can audit it at any time.',
+              proof: 'SHA-256 hash chain · Cannot be altered · Public',
+            },
+          ].map(p => {
+            const Icon = p.icon;
+            return (
+              <div key={p.title} className={`p-8 rounded-2xl border ${p.border} ${p.bg} space-y-5`}>
+                <div className={`p-3 rounded-xl bg-${p.color}-500/10 border border-${p.color}-500/20 w-fit`}>
+                  <Icon size={20} className={`text-${p.color}-400`} />
+                </div>
+                <h3 className="text-base font-black uppercase tracking-tight leading-snug">{p.title}</h3>
+                <p className="text-zinc-400 text-sm leading-relaxed">{p.body}</p>
+                <div className={`text-[8px] font-mono font-bold uppercase tracking-widest text-${p.color}-500/70 border-t border-${p.color}-500/10 pt-3`}>
+                  {p.proof}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Founder identity block — removes "anonymous platform" fear ── */}
+        <div className="p-8 md:p-12 rounded-3xl border border-zinc-800 bg-zinc-900/20 grid md:grid-cols-2 gap-10 items-center">
+          <div className="space-y-5">
+            <Tag color="blue"><UserCheck size={9} /> Meet the Founder</Tag>
+            <h3 className="text-3xl font-black uppercase tracking-tighter italic leading-tight">
+              This is Not an Anonymous Platform.<br />
+              <span className="text-teal-500">There is a real person behind it.</span>
+            </h3>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              Nested Ark OS is built and operated by <strong className="text-white">Impressions & Impacts Ltd</strong>, 
+              incorporated in Nigeria and operating across Lagos, London, and Dubai. 
+              The platform was created specifically to solve the Diaspora infrastructure trust problem — 
+              the disappeared contractor, the stalled build, the capital that never comes back.
+            </p>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              We are currently in <strong className="text-amber-400">Pilot Phase</strong> — operating openly, 
+              collecting feedback, and improving the system before full public launch. 
+              Your participation at this stage directly shapes the platform.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <a href="mailto:nestedark@gmail.com"
+                className="inline-flex items-center gap-2 px-5 py-2.5 border border-zinc-700 text-zinc-400 text-[10px] font-bold uppercase tracking-widest rounded-xl hover:border-teal-500 hover:text-teal-500 transition-all">
+                <Mail size={11} /> nestedark@gmail.com
+              </a>
+              <Link href="/about"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-teal-500 text-black text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white transition-all">
+                About Us <ArrowRight size={11} />
+              </Link>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { icon: '🇳🇬', label: 'Incorporated', value: 'Nigeria', sub: 'Impressions & Impacts Ltd' },
+              { icon: '🇬🇧', label: 'Operations',   value: 'London',  sub: 'UK presence & Diaspora focus' },
+              { icon: '🇦🇪', label: 'Gulf Region',  value: 'Dubai',   sub: 'Middle East investor network' },
+              { icon: '📧', label: 'Direct Contact', value: 'Open',   sub: 'nestedark@gmail.com' },
+            ].map(item => (
+              <div key={item.label} className="p-5 rounded-2xl border border-zinc-800 bg-black/20 space-y-1 text-center">
+                <p className="text-2xl">{item.icon}</p>
+                <p className="text-[8px] text-zinc-600 uppercase font-bold tracking-widest">{item.label}</p>
+                <p className="text-white font-black text-sm">{item.value}</p>
+                <p className="text-[9px] text-zinc-500">{item.sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Pilot phase transparency notice ── */}
+        <div className="p-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex flex-col md:flex-row items-start md:items-center gap-6">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex-shrink-0">
+            <Info size={20} className="text-amber-400" />
+          </div>
+          <div className="flex-1 space-y-2">
+            <p className="text-amber-300 font-black text-sm uppercase tracking-widest">Pilot Phase — Open &amp; Honest</p>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              Nested Ark is currently in a <strong className="text-white">controlled pilot phase</strong>. 
+              This means we are actively onboarding early operators, testing all verification flows, 
+              and refining the platform based on real feedback. During this phase, the platform is fully 
+              functional and all escrow, verification, and ledger systems are live. 
+              You are not using a demo — you are using the real system.
+            </p>
+          </div>
+          <Link href="/register"
+            className="flex-shrink-0 flex items-center gap-2 px-6 py-3 bg-amber-500 text-black font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-white transition-all">
+            Join Pilot <ArrowRight size={11} />
+          </Link>
+        </div>
+
+        {/* ── Trust FAQ — answers the top 3 questions from pilot feedback ── */}
+        <div className="space-y-4">
+          <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-[0.3em] text-center mb-8">Frequently Asked Trust Questions</p>
+          <div className="grid md:grid-cols-2 gap-4">
+            {[
+              {
+                q: 'What if the contractor disappears mid-build?',
+                a: 'They never received any payment to begin with. All funds sit in Paystack escrow until each milestone is independently verified. No verification = no release. The contractor cannot disappear with money they have not yet earned.',
+              },
+              {
+                q: 'Who actually holds my investment money?',
+                a: 'Paystack Financial Services Ltd — a CBN-licensed and regulated Nigerian fintech company. Not Nested Ark, not the developer, not the contractor. Your money remains in Paystack escrow until milestone release conditions are met.',
+              },
+              {
+                q: 'What happens if Nested Ark itself shuts down?',
+                a: 'Your escrow is held by Paystack, not by us. In the event of platform closure, Paystack's escrow protocol provides for investor capital return. All ledger records are immutable and remain accessible independently of our platform.',
+              },
+              {
+                q: 'How do I know the verification is real and not fabricated?',
+                a: 'Three completely independent systems must all confirm completion: AI image analysis detects fabricated or reused photos, an independent human auditor physically visits the site, and drone footage captures timestamped aerial evidence. All three must pass — independently.',
+              },
+            ].map(item => (
+              <div key={item.q} className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-3">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 size={14} className="text-teal-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-white font-black text-sm leading-snug">{item.q}</p>
+                </div>
+                <p className="text-zinc-400 text-xs leading-relaxed pl-5">{item.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </section>
 
       {/* ── PLATFORM CAPABILITIES ────────────────────────────────────────────── */}
