@@ -36,7 +36,8 @@ export default function ProjectPitchPage() {
   const [project, setProject]     = useState<any>(null);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [investments, setInvestments] = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [loading,  setLoading]  = useState(true);
+  const [fetchErr, setFetchErr] = useState('');
   const [tab, setTab]             = useState<'overview'|'financials'|'documents'|'team'>('overview');
   const [expandedMs, setExpandedMs] = useState<string | null>(null);
 
@@ -44,33 +45,65 @@ export default function ProjectPitchPage() {
     if (!authLoading && !user) router.replace('/login');
   }, [user, authLoading, router]);
 
-  useEffect(() => {
+  const loadProject = async () => {
     if (!id) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const [p, m, inv] = await Promise.allSettled([
-          api.get(`/api/projects/${id}`),
-          api.get(`/api/milestones/project/${id}`),
-          api.get(`/api/investments?project_id=${id}`),
-        ]);
-        if (p.status === 'fulfilled') setProject(p.value.data.project ?? p.value.data);
-        if (m.status === 'fulfilled') setMilestones(m.value.data.milestones ?? []);
-        if (inv.status === 'fulfilled') setInvestments(inv.value.data.investments ?? []);
-      } finally { setLoading(false); }
-    })();
-  }, [id]);
+    setLoading(true); setFetchErr('');
+    try {
+      const [p, m, inv] = await Promise.allSettled([
+        api.get(`/api/projects/${id}`),
+        api.get(`/api/milestones/project/${id}`),
+        api.get(`/api/investments?project_id=${id}`),
+      ]);
+      if (p.status === 'fulfilled') {
+        const proj = p.value.data.project ?? p.value.data;
+        if (!proj || !proj.id) setFetchErr('Project not found');
+        else setProject(proj);
+      } else {
+        // API error — could be cold start or genuinely missing
+        const errMsg = (p as any).reason?.response?.data?.error ?? (p as any).reason?.message ?? '';
+        setFetchErr(errMsg === 'Project not found' ? 'Project not found' : 'Could not load project — the server may be starting up. Please try again.');
+      }
+      if (m.status === 'fulfilled') setMilestones(m.value.data.milestones ?? []);
+      if (inv.status === 'fulfilled') setInvestments(inv.value.data.investments ?? []);
+    } catch { setFetchErr('Could not load project — please try again.'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadProject(); }, [id]); // eslint-disable-line
 
   if (authLoading || loading) return (
-    <div className="h-screen bg-[#050505] flex items-center justify-center">
+    <div className="h-screen bg-[#050505] flex flex-col items-center justify-center gap-3">
       <Loader2 className="animate-spin text-teal-500" size={32}/>
+      <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest">Loading project…</p>
     </div>
   );
-  if (!project) return (
-    <div className="h-screen bg-[#050505] flex flex-col items-center justify-center gap-4">
-      <AlertCircle className="text-red-400" size={32}/>
-      <p className="text-zinc-400">Project not found.</p>
-      <Link href="/investments" className="text-teal-500 hover:underline text-sm">← Back to Investments</Link>
+  if (fetchErr || !project) return (
+    <div className="h-screen bg-[#050505] flex flex-col items-center justify-center gap-5 px-6 text-center">
+      <AlertCircle className="text-amber-400" size={36}/>
+      <div>
+        <p className="text-white font-bold text-lg">{fetchErr || 'Project not found'}</p>
+        <p className="text-zinc-500 text-sm mt-1">
+          {fetchErr && fetchErr !== 'Project not found'
+            ? 'The server may still be waking up. Wait a moment and retry.'
+            : 'This project may have been removed or the link is incorrect.'}
+        </p>
+      </div>
+      <div className="flex gap-3 flex-wrap justify-center">
+        {fetchErr && fetchErr !== 'Project not found' && (
+          <button onClick={loadProject}
+            className="flex items-center gap-2 px-5 py-2.5 bg-teal-500 text-black font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-white transition-all">
+            Retry
+          </button>
+        )}
+        <Link href="/investments"
+          className="flex items-center gap-2 px-5 py-2.5 border border-zinc-700 text-zinc-400 hover:text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all">
+          <ArrowLeft size={12}/> Investment Nodes
+        </Link>
+        <Link href="/projects"
+          className="flex items-center gap-2 px-5 py-2.5 border border-zinc-700 text-zinc-400 hover:text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all">
+          Browse Marketplace
+        </Link>
+      </div>
     </div>
   );
 
