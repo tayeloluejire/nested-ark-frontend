@@ -201,7 +201,7 @@ export default function HomePage() {
           <div className="hidden md:flex items-center gap-6 text-[9px] font-bold uppercase tracking-widest">
             <a href="#problem"  className="text-zinc-500 hover:text-white transition-colors">Why It Exists</a>
             <a href="#projects" className="text-zinc-500 hover:text-white transition-colors">Project Types</a>
-            <a href="#roles"    className="text-zinc-500 hover:text-white transition-colors">Who It's For</a>
+            <a href="#roles"    className="text-zinc-500 hover:text-white transition-colors">Who It&apos;s For</a>
             <a href="#howitworks" className="text-zinc-500 hover:text-white transition-colors">How It Works</a>
             <a href="#trust"    className="text-zinc-500 hover:text-white transition-colors">Trust Layer</a>
             <a href="#diaspora" className="text-zinc-500 hover:text-white transition-colors">Diaspora</a>
@@ -497,7 +497,7 @@ export default function HomePage() {
       {/* ── WHO IT'S FOR ─────────────────────────────────────────────────────── */}
       <section id="roles" className="max-w-7xl mx-auto px-6 py-24 space-y-12">
         <div className="text-center space-y-4">
-          <Tag color="blue">Who It's For</Tag>
+          <Tag color="blue">Who It&apos;s For</Tag>
           <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter italic">
             One OS. <span className="text-teal-500">Five Command Centers.</span>
           </h2>
@@ -555,7 +555,7 @@ export default function HomePage() {
           <div className="text-center space-y-4">
             <Tag color="blue"><Eye size={9} /> Proof of Work</Tag>
             <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter italic">
-              We Don't Ask You to Trust Us.<br />
+              We Don&apos;t Ask You to Trust Us.<br />
               <span className="text-teal-500">The Drone Shows You.</span>
             </h2>
             <p className="text-zinc-500 text-sm max-w-2xl mx-auto leading-relaxed">
