@@ -856,7 +856,7 @@ export default function HomePage() {
               },
               {
                 q: 'What happens if Nested Ark itself shuts down?',
-                a: 'Your escrow is held by Paystack, not by us. In the event of platform closure, Paystack's escrow protocol provides for investor capital return. All ledger records are immutable and remain accessible independently of our platform.',
+                a: "Your escrow is held by Paystack, not by us. In the event of platform closure, Paystack's escrow protocol provides for investor capital return. All ledger records are immutable and remain accessible independently of our platform.",
               },
               {
                 q: 'How do I know the verification is real and not fabricated?',
