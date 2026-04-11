@@ -43,6 +43,7 @@ export default function ProjectSubmitPage() {
     hero_image_url: '',
     tags: '',
     visibility: 'PUBLIC',
+    permit_ref: '',       // LASG / Government digital permit reference number
   });
 
   const [milestones, setMilestones] = useState<Milestone[]>([
@@ -84,6 +85,7 @@ export default function ProjectSubmitPage() {
         timeline_months: parseInt(form.timeline_months) || 24,
         expected_roi: parseFloat(form.expected_roi) || 12,
         tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        permit_ref: form.permit_ref || undefined,
         milestones: milestones.map((m, i) => ({
           ...m,
           milestone_number: i + 1,
@@ -248,6 +250,27 @@ export default function ProjectSubmitPage() {
               <Field label="Timeline (months)" value={form.timeline_months} onChange={v => set('timeline_months',v)} placeholder="24" type="number" />
               <Field label="Expected ROI % p.a." value={form.expected_roi} onChange={v => set('expected_roi',v)} placeholder="12" type="number" />
               <Field label="Tags" value={form.tags} onChange={v => set('tags',v)} placeholder="residential, concrete, lekki" />
+              {/* ── Digital Permit Reference ── */}
+              <div className="md:col-span-2">
+                <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2 flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[9px] font-black uppercase tracking-wider bg-blue-500 text-white">PERMIT</span>
+                  Digital Permit Reference Number
+                  <span className="text-[8px] text-blue-400 font-normal normal-case tracking-normal">LASG / Government Issued</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.permit_ref}
+                  onChange={e => set('permit_ref', e.target.value)}
+                  placeholder="e.g. LASG-EPPPS-2026-000123"
+                  className="w-full bg-black border border-blue-500/30 focus:border-blue-500 rounded-xl px-4 py-3 text-white text-sm outline-none transition-colors font-mono"
+                />
+                <p className="text-[9px] text-zinc-600 mt-1.5 leading-relaxed">
+                  <span className="text-blue-400 font-bold">Lagos State Government now requires digital permits for all construction projects.</span>{' '}
+                  Enter your LASG e-Planning Portal reference or any government-issued permit number.
+                  This is displayed on your project listing and boosts investor trust scoring.
+                  Optional during Pilot Phase — required for live projects.
+                </p>
+              </div>
               <div>
                 <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Visibility</label>
                 <select value={form.visibility} onChange={e => set('visibility',e.target.value)}
