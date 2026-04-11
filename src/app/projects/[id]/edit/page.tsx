@@ -10,15 +10,14 @@ import {
   Loader2, Save, ArrowLeft, AlertCircle, CheckCircle2
 } from 'lucide-react';
 
-const PROJECT_TYPES  = ['INFRASTRUCTURE','RESIDENTIAL','COMMERCIAL','INDUSTRIAL','RENOVATION','LANDSCAPE'];
 const OWNER_TYPES    = ['INDIVIDUAL','CORPORATE','PRIVATE_BUSINESS','DEVELOPER','GOVERNMENT'];
 const STATUS_OPTIONS = ['ACTIVE','PENDING','PAUSED','COMPLETED','CANCELLED'];
 const RISK_GRADES    = ['A','B','C','D'];
 const VISIBILITY     = ['PUBLIC','PRIVATE','INVITE_ONLY'];
 
 export default function EditProjectPage() {
-  const { id } = useParams();
-  const router  = useRouter();
+  const { id }   = useParams<{ id: string }>();
+  const router   = useRouter();
   const { user } = useAuth();
 
   const [loading,    setLoading]    = useState(true);
@@ -88,8 +87,8 @@ export default function EditProjectPage() {
     } finally { setSubmitting(false); }
   };
 
-  const inputClass = "w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 text-white text-sm outline-none focus:border-teal-500 transition-colors";
-  const labelClass = "text-[9px] text-zinc-500 uppercase font-bold tracking-widest block mb-2";
+  const inputClass  = "w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3.5 text-white text-sm outline-none focus:border-teal-500 transition-colors";
+  const labelClass  = "text-[9px] text-zinc-500 uppercase font-bold tracking-widest block mb-2";
   const selectClass = inputClass + " cursor-pointer";
 
   if (loading) return (
@@ -108,7 +107,6 @@ export default function EditProjectPage() {
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       <Navbar />
-
       <main className="max-w-3xl mx-auto px-6 py-12">
 
         {/* Back */}
@@ -123,14 +121,11 @@ export default function EditProjectPage() {
           <p className="text-zinc-500 text-xs mt-1">Update your project details and specifications.</p>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-red-400 text-xs font-bold flex items-start gap-2 mb-6">
             <AlertCircle size={14} className="flex-shrink-0 mt-0.5" /> {error}
           </div>
         )}
-
-        {/* Success */}
         {success && (
           <div className="p-4 rounded-xl bg-teal-500/5 border border-teal-500/20 text-teal-400 text-xs font-bold flex items-center gap-2 mb-6">
             <CheckCircle2 size={14} /> Project updated! Redirecting…
@@ -141,49 +136,32 @@ export default function EditProjectPage() {
 
           {/* Core Info */}
           <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5">
-            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">
-              Core Information
-            </p>
-
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">Core Information</p>
             <div>
               <label className={labelClass}>Project Title *</label>
-              <input required value={form.title}
-                onChange={e => f('title', e.target.value)}
-                placeholder="Enter project title"
-                className={inputClass} />
+              <input required value={form.title} onChange={e => f('title', e.target.value)}
+                placeholder="Enter project title" className={inputClass} />
             </div>
-
             <div>
               <label className={labelClass}>Description</label>
-              <textarea value={form.description}
-                onChange={e => f('description', e.target.value)}
-                rows={4} placeholder="Full project description"
-                className={inputClass + " resize-none"} />
+              <textarea value={form.description} onChange={e => f('description', e.target.value)}
+                rows={4} placeholder="Full project description" className={inputClass + " resize-none"} />
             </div>
-
             <div>
               <label className={labelClass}>Developer Pitch / Summary</label>
-              <textarea value={form.pitch_summary}
-                onChange={e => f('pitch_summary', e.target.value)}
-                rows={3} placeholder="Short pitch for investors"
-                className={inputClass + " resize-none"} />
+              <textarea value={form.pitch_summary} onChange={e => f('pitch_summary', e.target.value)}
+                rows={3} placeholder="Short pitch for investors" className={inputClass + " resize-none"} />
             </div>
-
             <div>
               <label className={labelClass}>Hero Image URL</label>
-              <input value={form.hero_image_url}
-                onChange={e => f('hero_image_url', e.target.value)}
-                placeholder="https://..."
-                className={inputClass} />
+              <input value={form.hero_image_url} onChange={e => f('hero_image_url', e.target.value)}
+                placeholder="https://..." className={inputClass} />
             </div>
           </div>
 
           {/* Status & Progress */}
           <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5">
-            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">
-              Status &amp; Progress
-            </p>
-
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">Status &amp; Progress</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Project Status</label>
@@ -198,7 +176,6 @@ export default function EditProjectPage() {
                 </select>
               </div>
             </div>
-
             <div>
               <label className={labelClass}>Progress ({form.progress_percentage}%)</label>
               <input type="range" min={0} max={100} value={form.progress_percentage}
@@ -212,17 +189,12 @@ export default function EditProjectPage() {
 
           {/* Financial */}
           <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5">
-            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">
-              Financial &amp; Risk
-            </p>
-
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">Financial &amp; Risk</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Expected ROI % p.a.</label>
-                <input type="number" min={0} max={100} step={0.5}
-                  value={form.expected_roi}
-                  onChange={e => f('expected_roi', Number(e.target.value))}
-                  className={inputClass} />
+                <input type="number" min={0} max={100} step={0.5} value={form.expected_roi}
+                  onChange={e => f('expected_roi', Number(e.target.value))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Risk Grade</label>
@@ -231,61 +203,45 @@ export default function EditProjectPage() {
                 </select>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Assigned Bank</label>
-                <input value={form.assigned_bank}
-                  onChange={e => f('assigned_bank', e.target.value)}
-                  placeholder="Bank name (optional)"
-                  className={inputClass} />
+                <input value={form.assigned_bank} onChange={e => f('assigned_bank', e.target.value)}
+                  placeholder="Bank name (optional)" className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Primary Supplier</label>
-                <input value={form.primary_supplier}
-                  onChange={e => f('primary_supplier', e.target.value)}
-                  placeholder="Supplier name (optional)"
-                  className={inputClass} />
+                <input value={form.primary_supplier} onChange={e => f('primary_supplier', e.target.value)}
+                  placeholder="Supplier name (optional)" className={inputClass} />
               </div>
             </div>
           </div>
 
           {/* Owner Info */}
           <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-900/20 space-y-5">
-            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">
-              Owner Information
-            </p>
-
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest border-b border-zinc-800 pb-3">Owner Information</p>
             <div>
               <label className={labelClass}>Owner Type</label>
               <select value={form.owner_type} onChange={e => f('owner_type', e.target.value)} className={selectClass}>
                 {OWNER_TYPES.map(o => <option key={o} value={o}>{o.replace('_', ' ')}</option>)}
               </select>
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Owner Name</label>
-                <input value={form.owner_name}
-                  onChange={e => f('owner_name', e.target.value)}
-                  placeholder="Full name"
-                  className={inputClass} />
+                <input value={form.owner_name} onChange={e => f('owner_name', e.target.value)}
+                  placeholder="Full name" className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Owner Phone</label>
-                <input value={form.owner_phone}
-                  onChange={e => f('owner_phone', e.target.value)}
-                  placeholder="+234..."
-                  className={inputClass} />
+                <input value={form.owner_phone} onChange={e => f('owner_phone', e.target.value)}
+                  placeholder="+234..." className={inputClass} />
               </div>
             </div>
-
             <div>
               <label className={labelClass}>Company / Organisation</label>
-              <input value={form.owner_company}
-                onChange={e => f('owner_company', e.target.value)}
-                placeholder="Company name (optional)"
-                className={inputClass} />
+              <input value={form.owner_company} onChange={e => f('owner_company', e.target.value)}
+                placeholder="Company name (optional)" className={inputClass} />
             </div>
           </div>
 
@@ -297,8 +253,7 @@ export default function EditProjectPage() {
                 ? <><Loader2 className="animate-spin" size={14} /> Saving…</>
                 : success
                 ? <><CheckCircle2 size={14} /> Saved!</>
-                : <><Save size={14} /> Save Changes</>
-              }
+                : <><Save size={14} /> Save Changes</>}
             </button>
             <button type="button" onClick={() => router.back()}
               className="px-6 py-4 border border-zinc-700 text-zinc-400 font-bold text-xs uppercase tracking-widest rounded-xl hover:border-zinc-500 hover:text-white transition-all">
@@ -308,7 +263,6 @@ export default function EditProjectPage() {
 
         </form>
       </main>
-
       <Footer />
     </div>
   );
