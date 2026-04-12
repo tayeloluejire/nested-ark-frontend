@@ -18,13 +18,10 @@ import {
 const CAT_ICON: Record<string,string> = {
   Roads:'🛣️', Energy:'⚡', Water:'💧', Bridges:'🌉', Technology:'💻', Railways:'🚆', Ports:'⚓', Healthcare:'🏥'
 };
-const MOCK_GALLERY = [
-  { type:'render', label:'Site Master Plan', src:'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&q=80' },
-  { type:'render', label:'3D Elevation View', src:'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80' },
-  { type:'doc',    label:'Environmental Impact Assessment', ext:'PDF' },
-  { type:'doc',    label:'Government Approval Letter',     ext:'PDF' },
-  { type:'doc',    label:'Financial Model & Projections',  ext:'XLSX' },
-  { type:'doc',    label:'Engineering Feasibility Report', ext:'PDF' },
+// Real gallery — uses project.hero_image_url if available, then Unsplash fallback
+const FALLBACK_IMAGES = [
+  { label: 'Site Master Plan',  src: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=600&q=80' },
+  { label: '3D Elevation View', src: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=600&q=80' },
 ];
 const RISK_GRADES = ['AAA','AA','A','BBB'];
 
@@ -222,15 +219,37 @@ export default function ProjectPitchPage() {
             {/* gallery */}
             <div className="space-y-4">
               <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Site Visuals & Renders</h3>
+              {/* Hero image — real project image if uploaded, fallback to architectural renders */}
               <div className="grid grid-cols-2 gap-3">
-                {MOCK_GALLERY.filter(g => g.type === 'render').map((g, i) => (
-                  <div key={i} className="rounded-xl overflow-hidden border border-zinc-800 relative group aspect-video">
-                    <img src={g.src} alt={g.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
-                    <div className="absolute inset-0 bg-black/50 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <p className="text-[9px] text-white font-bold uppercase tracking-widest">{g.label}</p>
+                {project.hero_image_url ? (
+                  <>
+                    {/* Real hero image spans full width */}
+                    <div className="col-span-2 rounded-xl overflow-hidden border border-teal-500/20 relative group aspect-video">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={project.hero_image_url}
+                        alt={project.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                        onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                        <p className="text-[9px] text-teal-400 font-mono font-black">{project.project_number}</p>
+                        <p className="text-white text-sm font-bold uppercase tracking-tight">{project.title}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  </>
+                ) : (
+                  // Fallback to architectural renders when no hero image
+                  FALLBACK_IMAGES.map((g, i) => (
+                    <div key={i} className="rounded-xl overflow-hidden border border-zinc-800 relative group aspect-video">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g.src} alt={g.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <div className="absolute inset-0 bg-black/50 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <p className="text-[9px] text-white font-bold uppercase tracking-widest">{g.label}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               <p className="text-[9px] text-zinc-600">3D architectural renders · Site master plans · Engineering schematics available in Documents tab.</p>
             </div>
@@ -345,10 +364,14 @@ export default function ProjectPitchPage() {
         {tab === 'documents' && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MOCK_GALLERY.filter(g => g.type === 'doc').concat([
-                { type:'doc', label:'Site Survey & Geotechnical Report', ext:'PDF' },
-                { type:'doc', label:'Contractor Qualification Pack',     ext:'PDF' },
-              ]).map((doc, i) => (
+              {[
+                { label:'Environmental Impact Assessment', ext:'PDF' },
+                { label:'Government Approval Letter',      ext:'PDF' },
+                { label:'Financial Model & Projections',   ext:'XLSX' },
+                { label:'Engineering Feasibility Report',  ext:'PDF' },
+                { label:'Site Survey & Geotechnical Report', ext:'PDF' },
+                { label:'Contractor Qualification Pack',   ext:'PDF' },
+              ].map((doc, i) => (
                 <div key={i} className="p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 flex items-center gap-4 hover:border-zinc-700 transition-all">
                   <div className="h-10 w-10 rounded-xl bg-zinc-800 flex items-center justify-center flex-shrink-0">
                     <FileText size={18} className="text-teal-500"/>
